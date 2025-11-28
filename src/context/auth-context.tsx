@@ -1,0 +1,452 @@
+
+"use client";
+
+import React, { createContext, useContext, useState, useEffect } from "react";
+import type { User } from "@/lib/types";
+import { useRouter, usePathname } from "next/navigation";
+import {
+  getUser,
+  getAdminPassword,
+  updateUserCredential as updateUserCredentialInDb,
+  updateUserPhoneNumber,
+  seedDatabase,
+  getAllUsers,
+} from "@/lib/firestore";
+import { auth } from "@/lib/firebase";
+import {
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  onAuthStateChanged,
+  signOut,
+  ConfirmationResult,
+} from "firebase/auth";
+
+// --- Types ---
+interface AuthContextType {
+  currentUser: User | null;
+  isAdmin: boolean;
+  isAuthLoading: boolean;
+  isDataLoading: boolean;
+  users: User[];
+  login: (
+    role: "admin",
+    credential?: string
+  ) => Promise<{ success: boolean; lockedUntil?: number; message?: string }>;
+  verifyPin: (
+    userId: string,
+    pin: string,
+  ) => Promise<{ success: boolean; needsPhoneNumber?: boolean, lockedUntil?: number; message?: string }>;
+  savePhoneNumberAndSendOtp: (
+    userId: string,
+    phoneNumber: string
+  ) => Promise<{ success: boolean; message?: string }>;
+  verifyOtp: (
+    otp: string
+  ) => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
+  updateUserCredential: (newCredential: string) => Promise<boolean>;
+  getLockoutTime: (role: "admin" | "member", userId?: string) => number;
+  getToken: () => Promise<string | null>;
+}
+
+// --- Hook ---
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  return context;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+// --- Constants ---
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 5;
+
+// --- Helper functions (lockout logic) ---
+const getAttemptsKey = (role: "admin" | "member", userId?: string) =>
+  role === "admin" ? "login-attempts-admin" : `login-attempts-${userId}`;
+
+const getLoginAttempts = (key: string) => {
+  try {
+    const attempts = localStorage.getItem(key);
+    return attempts ? JSON.parse(attempts) : { count: 0, timestamp: 0 };
+  } catch {
+    return { count: 0, timestamp: 0 };
+  }
+};
+
+const setLoginAttempts = (key: string, count: number, timestamp: number) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ count, timestamp }));
+  } catch (error) {
+    console.error("Could not write to localStorage", error);
+  }
+};
+
+const clearLoginAttempts = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.error("Could not clear localStorage", error);
+  }
+};
+
+// --- Provider ---
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+
+  // State for OTP flow
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+
+
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // --- Setup reCAPTCHA ---
+  const setupRecaptcha = () => {
+    // Only run on client
+    if (typeof window === 'undefined') return null;
+
+    // Clear previous verifier if it exists
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+    }
+    
+    try {
+      // Ensure the container is in the DOM before creating the verifier
+      const container = document.getElementById('recaptcha-container');
+      if (container) {
+         window.recaptchaVerifier = new RecaptchaVerifier(
+          auth,
+          container,
+          {
+            size: "invisible",
+            callback: () => {
+              // reCAPTCHA solved, allow sign-in
+            },
+            "expired-callback": () => {
+              // Response expired. Ask user to solve reCAPTCHA again.
+              console.warn("Recaptcha expired. Please try again.");
+              if (pathname === '/login') {
+                setupRecaptcha(); // Re-initialize only on login page
+              }
+            },
+          }
+        );
+        return window.recaptchaVerifier;
+      }
+    } catch (error) {
+      console.error("Recaptcha setup failed", error);
+    }
+    return null;
+  };
+  
+  // --- OTP Sender ---
+  const sendOtp = async (phoneNumber: string) => {
+    let verifier = window.recaptchaVerifier;
+    if (!verifier) {
+        console.log("Recaptcha verifier not initialized, setting up now.");
+        verifier = setupRecaptcha();
+    }
+    
+    if (!verifier) {
+      return { success: false, message: "Recaptcha not ready. Please wait a moment and try again." };
+    }
+
+    try {
+      const result = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+      setConfirmationResult(result);
+      return { success: true };
+    } catch (err: any) {
+      console.error("OTP send error:", err);
+       // This error is common if the domain is not whitelisted in Firebase console
+      if (err.code === 'auth/captcha-check-failed' || err.code === 'auth/invalid-app-credential') {
+         return { success: false, message: `Please ensure this website's domain is authorized in your Firebase project settings.` };
+      }
+      // Reset verifier on other errors to allow retry
+      if (pathname === '/login') {
+          setupRecaptcha();
+      }
+      return { success: false, message: `OTP could not be sent. ${err.code}` };
+    }
+  }
+
+
+  // --- Init app and users ---
+  useEffect(() => {
+    const initialize = async () => {
+      setIsDataLoading(true);
+      try {
+        await seedDatabase();
+        const fetchedUsers = await getAllUsers();
+        setUsers(fetchedUsers);
+      } catch (error) {
+        console.error("Initialization error:", error);
+      } finally {
+        setIsDataLoading(false);
+      }
+
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        // Admin user is handled separately as it doesn't use Firebase Auth
+        const storedAdminId = localStorage.getItem("tifresh-userid");
+        if (storedAdminId === 'admin') {
+            const adminUser = await getUser("admin");
+            if (adminUser) {
+                setCurrentUser(adminUser);
+                setIsAdmin(true);
+            }
+        } else if (firebaseUser) {
+          const storedId = localStorage.getItem("tifresh-userid");
+          if (storedId) {
+            const appUser = await getUser(storedId);
+            if (appUser) {
+              setCurrentUser(appUser);
+              setIsAdmin(false);
+            } else {
+              await signOut(auth); // Mismatch, sign out
+            }
+          } else {
+             await signOut(auth); // No stored ID, sign out
+          }
+        } else {
+          setCurrentUser(null);
+          setIsAdmin(false);
+          localStorage.removeItem("tifresh-userid");
+        }
+        setIsAuthLoading(false);
+      });
+
+      return () => unsubscribe();
+    };
+
+    initialize();
+  }, []);
+
+  // --- Setup recaptcha only on login page ---
+  useEffect(() => {
+    if (pathname === "/login" && !isAuthLoading && !currentUser) {
+      if (!window.recaptchaVerifier) {
+        setupRecaptcha();
+      }
+    }
+  }, [pathname, isAuthLoading, currentUser]);
+
+
+  // --- Lockout ---
+  const getLockoutTime = (
+    role: "admin" | "member",
+    userId?: string
+  ): number => {
+    if (typeof window === 'undefined') return 0;
+    const key = getAttemptsKey(role, userId);
+    const attempts = getLoginAttempts(key);
+    if (attempts.count < MAX_ATTEMPTS) return 0;
+
+    const lockoutEnd = attempts.timestamp + LOCKOUT_MINUTES * 60 * 1000;
+    if (Date.now() > lockoutEnd) {
+      clearLoginAttempts(key);
+      return 0;
+    }
+    return lockoutEnd;
+  };
+
+  const recordFailedAttempt = (role: "admin" | "member", userId?: string) => {
+    const key = getAttemptsKey(role, userId);
+    let attempts = getLoginAttempts(key);
+    const now = Date.now();
+
+    if (now > attempts.timestamp + LOCKOUT_MINUTES * 60 * 1000) {
+      attempts = { count: 0, timestamp: 0 };
+    }
+
+    const count = attempts.count + 1;
+    const timestamp = attempts.count === 0 ? now : attempts.timestamp;
+    setLoginAttempts(key, count, timestamp);
+
+    if (count >= MAX_ATTEMPTS) {
+      return { lockedUntil: timestamp + LOCKOUT_MINUTES * 60 * 1000 };
+    }
+    return {};
+  };
+
+  // --- Admin login ---
+  const login = async (
+    role: "admin",
+    credential?: string
+  ): Promise<{ success: boolean; lockedUntil?: number; message?: string }> => {
+    const key = getAttemptsKey("admin");
+    const lockoutEnd = getLockoutTime("admin");
+    if (Date.now() < lockoutEnd)
+      return { success: false, lockedUntil: lockoutEnd };
+
+    const adminPassword = await getAdminPassword();
+    if (adminPassword && credential === adminPassword) {
+      const adminUser = await getUser("admin");
+      if (adminUser) {
+        localStorage.setItem("tifresh-userid", "admin");
+        setCurrentUser(adminUser);
+        setIsAdmin(true);
+        clearLoginAttempts(key);
+        router.push("/");
+        return { success: true };
+      }
+    }
+
+    const failure = recordFailedAttempt("admin");
+    return { success: false, message: "Invalid admin password.", ...failure };
+  };
+
+  // --- Member login step 1: Verify PIN ---
+  const verifyPin = async (
+    userId: string,
+    pin: string,
+  ) => {
+    const key = getAttemptsKey("member", userId);
+    const lockoutEnd = getLockoutTime("member", userId);
+    if (Date.now() < lockoutEnd)
+      return { success: false, lockedUntil: lockoutEnd };
+
+    const user = await getUser(userId);
+    if (user && user.pin === pin) {
+      clearLoginAttempts(key);
+      setPendingUserId(userId); // Set pending user for next steps
+      if (user.phoneNumber) {
+        // Phone number exists, proceed to send OTP
+        const otpResult = await sendOtp(user.phoneNumber);
+        if (otpResult.success) {
+          return { success: true, needsPhoneNumber: false };
+        } else {
+          return { success: false, message: otpResult.message };
+        }
+      } else {
+        // Phone number does not exist, need to ask user for it
+        return { success: true, needsPhoneNumber: true };
+      }
+    } else {
+      const failure = recordFailedAttempt("member", userId);
+      return { success: false, message: "Invalid PIN.", ...failure };
+    }
+  };
+
+  // --- Member login step 2: Save Phone Number & Send OTP ---
+  const savePhoneNumberAndSendOtp = async (userId: string, phoneNumber: string) => {
+    if (userId !== pendingUserId) {
+      return { success: false, message: "User session mismatch. Please start over."};
+    }
+    try {
+      await updateUserPhoneNumber(userId, phoneNumber);
+      // Refresh local users array
+      setUsers(users.map(u => u.id === userId ? { ...u, phoneNumber } : u));
+      return await sendOtp(phoneNumber);
+    } catch (error: any) {
+      return { success: false, message: error.message || "Could not save phone number." };
+    }
+  };
+
+
+  // --- Member login step 3: Verify OTP ---
+  const verifyOtp = async (otp: string) => {
+    if (!confirmationResult || !pendingUserId) {
+      return { success: false, message: "No OTP request pending." };
+    }
+    try {
+      // confirm the otp
+      await confirmationResult.confirm(otp);
+      
+      const appUser = await getUser(pendingUserId);
+      if (appUser) {
+        // Store user ID, set current user state immediately
+        localStorage.setItem("tifresh-userid", pendingUserId);
+        setCurrentUser(appUser);
+        setIsAdmin(false);
+        router.push("/");
+      } else {
+         throw new Error("Could not find user data after authentication.");
+      }
+
+      // Clean up state
+      setConfirmationResult(null);
+      setPendingUserId(null);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("OTP verification error:", err);
+      // Don't record this as a lockout failure, just an invalid OTP
+      return { success: false, message: `Invalid OTP. Please try again.` };
+    }
+  };
+
+  // --- Logout ---
+  const logout = async () => {
+    if (isAdmin) {
+      localStorage.removeItem("tifresh-userid");
+      setCurrentUser(null);
+      setIsAdmin(false);
+      router.push("/login");
+    } else {
+      await signOut(auth);
+    }
+  };
+
+  // --- Get Token ---
+  const getToken = async (): Promise<string | null> => {
+    if (isAdmin) {
+      // For admin, the "token" is just the raw value in local storage.
+      return localStorage.getItem('tifresh-userid');
+    }
+    if (auth.currentUser) {
+      // For regular users, it's the Firebase ID token.
+      return auth.currentUser.getIdToken();
+    }
+    return null;
+  }
+
+  // --- Update credential ---
+  const updateUserCredential = async (newCredential: string) => {
+    if (!currentUser) return false;
+    try {
+      await updateUserCredentialInDb(currentUser.id, newCredential, isAdmin);
+      return true;
+    } catch (err) {
+      console.error("Failed to update credential:", err);
+      return false;
+    }
+  };
+
+  // --- Context value ---
+  const value: AuthContextType = {
+    currentUser,
+    isAdmin,
+    isAuthLoading,
+    isDataLoading,
+    users,
+    login,
+    verifyPin,
+    savePhoneNumberAndSendOtp,
+    verifyOtp,
+    logout,
+    updateUserCredential,
+    getLockoutTime,
+    getToken,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {/* must exist in DOM for reCAPTCHA */}
+      <div id="recaptcha-container" />
+    </AuthContext.Provider>
+  );
+}
+
+// Extend the window interface for the recaptcha verifier
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+  }
+}
