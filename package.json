@@ -1,8 +1,7 @@
-
 {
   "name": "nextn",
   "version": "0.1.0",
-  "private": "true",
+  "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
@@ -48,7 +47,7 @@
     "genkit": "^1.14.1",
     "googleapis": "^140.0.1",
     "lucide-react": "^0.475.0",
-    "next": "15.3.3",
+    "next": "^15.4.0",
     "next-themes": "^0.3.0",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",
@@ -72,5 +71,3 @@
     "typescript": "^5"
   }
 }
-
-    
