@@ -6,54 +6,61 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function appConfigExists() {
-      return exists(/databases/$(database)/documents/config/app);
+    function groupAppConfigExists(groupId) {
+      return exists(/databases/$(database)/documents/groups/$(groupId)/config/app);
     }
 
-    // Setup page runs before auth. Allow one-time bootstrap writes only
-    // while app config does not exist yet.
-    function canBootstrapSetup() {
-      return !appConfigExists();
+    // Setup is unauthenticated. Allow creating a group's initial docs only
+    // if that group's app config does not exist yet.
+    function canBootstrapGroupSetup(groupId) {
+      return !groupAppConfigExists(groupId);
     }
 
-    match /config/app {
-      allow create: if canBootstrapSetup();
+    match /groups/{groupId} {
       allow read: if true;
+      allow create: if !exists(/databases/$(database)/documents/groups/$(groupId));
       allow update: if isSignedIn();
       allow delete: if false;
-    }
 
-    match /config/admin {
-      allow create: if canBootstrapSetup();
-      allow read: if true;
-      allow update: if isSignedIn();
-      allow delete: if false;
-    }
+      match /config/app {
+        allow create: if canBootstrapGroupSetup(groupId);
+        allow read: if true;
+        allow update: if isSignedIn();
+        allow delete: if false;
+      }
 
-    match /users/{userId} {
-      allow create: if canBootstrapSetup();
-      allow read, create, update: if true;
-      allow delete: if false;
-    }
+      match /config/admin {
+        allow create: if canBootstrapGroupSetup(groupId);
+        allow read: if true;
+        allow update: if isSignedIn();
+        allow delete: if false;
+      }
 
-    match /expenses/{expenseId} {
-      allow read, write: if isSignedIn();
-    }
+      match /users/{userId} {
+        allow create: if canBootstrapGroupSetup(groupId);
+        allow read, create, update: if true;
+        allow delete: if false;
+      }
 
-    match /contributions/{contributionId} {
-      allow read, write: if isSignedIn();
-    }
+      match /expenses/{expenseId} {
+        allow read, write: if isSignedIn();
+      }
 
-    match /messages/{messageId} {
-      allow read, write: if isSignedIn();
-    }
+      match /contributions/{contributionId} {
+        allow read, write: if isSignedIn();
+      }
 
-    match /auditLogs/{entryId} {
-      allow read, write: if isSignedIn();
-    }
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
 
-    match /monthArchives/{archiveId} {
-      allow read, write: if isSignedIn();
+      match /auditLogs/{entryId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /monthArchives/{archiveId} {
+        allow read, write: if isSignedIn();
+      }
     }
 
     // Block everything else by default.

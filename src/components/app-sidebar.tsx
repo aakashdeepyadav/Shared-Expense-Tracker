@@ -31,11 +31,14 @@ import type { ChatMessage } from "@/lib/types";
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { currentUser, logout, isAdmin, appConfig } = useAuth();
+  const { currentUser, logout, isAdmin, appConfig, refreshGroupDirectory } =
+    useAuth();
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
+
+    refreshGroupDirectory();
 
     const unsub = subscribeToMessages((messages: ChatMessage[]) => {
       const anyUnread = messages.some(
@@ -45,7 +48,7 @@ export function AppSidebar() {
     });
 
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, refreshGroupDirectory]);
 
   if (!currentUser || pathname === "/login" || pathname === "/setup") {
     return null;
@@ -56,11 +59,16 @@ export function AppSidebar() {
   return (
     <Sidebar variant="floating" className="p-2 md:p-3">
       <SidebarHeader className="p-4 rounded-2xl border border-white/10 bg-sidebar/80 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <Logo className="w-8 h-8" />
-          <h1 className="font-headline text-lg font-bold truncate">
-            {appLabel}
-          </h1>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Logo className="w-8 h-8" />
+            <h1 className="font-headline text-lg font-bold truncate">
+              {appLabel}
+            </h1>
+          </div>
+          <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            Change group from Login by typing group ID.
+          </p>
         </div>
       </SidebarHeader>
       <SidebarContent className="p-3 md:p-4">

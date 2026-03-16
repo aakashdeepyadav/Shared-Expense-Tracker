@@ -7,7 +7,12 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import type { User, AppConfig, MemberSignupInput } from "@/lib/types";
+import type {
+  User,
+  AppConfig,
+  MemberSignupInput,
+  GroupDirectoryEntry,
+} from "@/lib/types";
 import { useRouter, usePathname } from "next/navigation";
 import {
   getUser,
@@ -17,6 +22,11 @@ import {
   getAppConfig,
   getAllUsers,
   createMemberFromSignup,
+  getGroupDirectory,
+  selectGroupById,
+  getActiveGroupId,
+  setActiveGroupId,
+  clearActiveGroupId,
 } from "@/lib/firestore";
 import { auth } from "@/lib/firebase";
 import {
@@ -35,7 +45,18 @@ interface AuthContextType {
   isDataLoading: boolean;
   isAppConfigured: boolean;
   appConfig: AppConfig | null;
+  activeGroupId: string | null;
+  availableGroups: GroupDirectoryEntry[];
   users: User[];
+  loginWithCredentials: (params: {
+    name: string;
+    password: string;
+  }) => Promise<{
+    success: boolean;
+    requiresOtp?: boolean;
+    lockedUntil?: number;
+    message?: string;
+  }>;
   login: (
     role: "admin",
     credential?: string,
@@ -60,6 +81,11 @@ interface AuthContextType {
     payload: MemberSignupInput,
   ) => Promise<{ success: boolean; message?: string }>;
   refreshAppSetup: () => Promise<void>;
+  refreshGroupDirectory: () => Promise<void>;
+  selectGroup: (
+    groupId: string,
+  ) => Promise<{ success: boolean; message?: string }>;
+  clearSelectedGroup: () => Promise<void>;
   getLockoutTime: (role: "admin" | "member", userId?: string) => number;
   getToken: () => Promise<string | null>;
 }
@@ -133,6 +159,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [isAppConfigured, setIsAppConfigured] = useState(false);
+  const [activeGroupId, setActiveGroupIdState] = useState<string | null>(
+    getActiveGroupId(),
+  );
+  const [availableGroups, setAvailableGroups] = useState<GroupDirectoryEntry[]>(
+    [],
+  );
 
   // State for OTP flow
   const [confirmationResult, setConfirmationResult] =
@@ -221,40 +253,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshGroupDirectory = useCallback(async () => {
+    try {
+      const groups = await getGroupDirectory();
+      setAvailableGroups(groups);
+    } catch (error) {
+      if (!isPermissionDeniedError(error)) {
+        console.warn("Could not load groups:", getErrorMessage(error));
+      }
+      setAvailableGroups([]);
+    }
+  }, []);
+
+  const loadActiveGroupData = useCallback(async (groupId?: string) => {
+    const resolvedGroupId = groupId || getActiveGroupId();
+    setActiveGroupIdState(resolvedGroupId || null);
+
+    if (!resolvedGroupId) {
+      setAppConfig(null);
+      setIsAppConfigured(false);
+      setUsers([]);
+      return;
+    }
+
+    const loadedConfig = await getAppConfig(resolvedGroupId);
+    setAppConfig(loadedConfig);
+    setIsAppConfigured(!!loadedConfig?.initialized);
+
+    if (!loadedConfig?.initialized) {
+      setUsers([]);
+      return;
+    }
+
+    try {
+      const fetchedUsers = await getAllUsers();
+      setUsers(fetchedUsers);
+    } catch (usersError: unknown) {
+      if (!isPermissionDeniedError(usersError)) {
+        console.warn(
+          "Users prefetch skipped during initialization:",
+          getErrorMessage(usersError),
+        );
+      }
+      setUsers([]);
+    }
+  }, []);
+
   // --- Init app and users ---
   useEffect(() => {
     const initialize = async () => {
       setIsAuthLoading(true);
       setIsDataLoading(true);
       try {
-        const loadedConfig = await getAppConfig();
-
-        setAppConfig(loadedConfig);
-        setIsAppConfigured(!!loadedConfig?.initialized);
-
-        if (!loadedConfig?.initialized) {
-          setUsers([]);
-          setCurrentUser(null);
-          setIsAdmin(false);
-          setIsDataLoading(false);
-          setIsAuthLoading(false);
-          return;
-        }
-
-        try {
-          const fetchedUsers = await getAllUsers();
-          setUsers(fetchedUsers);
-        } catch (usersError: unknown) {
-          // Some Firestore rule sets block unauthenticated list reads.
-          // Keep app config state valid and let login continue gracefully.
-          if (!isPermissionDeniedError(usersError)) {
-            console.warn(
-              "Users prefetch skipped during initialization:",
-              getErrorMessage(usersError),
-            );
-          }
-          setUsers([]);
-        }
+        await refreshGroupDirectory();
+        await loadActiveGroupData();
       } catch (error) {
         if (!isPermissionDeniedError(error)) {
           console.error("Initialization error:", error);
@@ -316,15 +368,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initialize();
-  }, []);
+  }, [loadActiveGroupData, refreshGroupDirectory]);
 
   const refreshAppSetup = async () => {
-    const loadedConfig = await getAppConfig();
-    setAppConfig(loadedConfig);
-    setIsAppConfigured(!!loadedConfig?.initialized);
-    if (loadedConfig?.initialized) {
-      const fetchedUsers = await getAllUsers();
-      setUsers(fetchedUsers);
+    await refreshGroupDirectory();
+    await loadActiveGroupData();
+  };
+
+  const clearSelectedGroup = async () => {
+    clearActiveGroupId();
+    setActiveGroupIdState(null);
+    setAppConfig(null);
+    setIsAppConfigured(false);
+    setUsers([]);
+    setCurrentUser(null);
+    setIsAdmin(false);
+    localStorage.removeItem(LOCAL_USER_ID_KEY);
+    await signOut(auth).catch(() => {
+      // noop
+    });
+  };
+
+  const selectGroup = async (groupId: string) => {
+    try {
+      const nextGroupId = groupId.trim();
+      if (!nextGroupId) {
+        return { success: false, message: "Group ID is required." };
+      }
+
+      await signOut(auth).catch(() => {
+        // noop
+      });
+      localStorage.removeItem(LOCAL_USER_ID_KEY);
+      setCurrentUser(null);
+      setIsAdmin(false);
+
+      const selectedConfig = await selectGroupById(nextGroupId);
+      const canonicalGroupId = selectedConfig.groupId || nextGroupId;
+      setActiveGroupId(canonicalGroupId);
+      setActiveGroupIdState(canonicalGroupId);
+      await loadActiveGroupData(canonicalGroupId);
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: getErrorMessage(error),
+      };
     }
   };
 
@@ -377,6 +467,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { lockedUntil: timestamp + LOCKOUT_MINUTES * 60 * 1000 };
     }
     return {};
+  };
+
+  const loginWithCredentials = async (params: {
+    name: string;
+    password: string;
+  }): Promise<{
+    success: boolean;
+    requiresOtp?: boolean;
+    lockedUntil?: number;
+    message?: string;
+  }> => {
+    if (!isAppConfigured) {
+      return {
+        success: false,
+        message:
+          "Setup is not complete yet. Please finish configuration first.",
+      };
+    }
+
+    const typedName = params.name.trim();
+    const typedPassword = params.password.trim();
+    if (!typedName || !typedPassword) {
+      return {
+        success: false,
+        message: "Name and password are required.",
+      };
+    }
+
+    const matchedUser = users.find(
+      (user) => user.name.toLowerCase() === typedName.toLowerCase(),
+    );
+
+    if (!matchedUser) {
+      return {
+        success: false,
+        message: "Invalid name or password.",
+      };
+    }
+
+    const isMatchedAdmin = matchedUser.id === "admin";
+
+    if (isMatchedAdmin) {
+      const adminLockoutEnd = getLockoutTime("admin");
+      if (Date.now() < adminLockoutEnd) {
+        return { success: false, lockedUntil: adminLockoutEnd };
+      }
+
+      const adminPassword = await getAdminPassword();
+      if (!adminPassword || adminPassword !== typedPassword) {
+        const failure = recordFailedAttempt("admin");
+        return {
+          success: false,
+          message: "Invalid name or password.",
+          ...failure,
+        };
+      }
+
+      if (!matchedUser.phoneNumber) {
+        return {
+          success: false,
+          message:
+            "Admin phone number is not set. Update it from setup/settings first.",
+        };
+      }
+
+      const otpResult = await sendOtp(matchedUser.phoneNumber);
+      if (!otpResult.success) {
+        return {
+          success: false,
+          message: otpResult.message || "Could not send OTP.",
+        };
+      }
+
+      clearLoginAttempts(getAttemptsKey("admin"));
+      setPendingUserId("admin");
+      return { success: true, requiresOtp: true };
+    }
+
+    const memberLockoutEnd = getLockoutTime("member", matchedUser.id);
+    if (Date.now() < memberLockoutEnd) {
+      return { success: false, lockedUntil: memberLockoutEnd };
+    }
+
+    if (matchedUser.pin !== typedPassword) {
+      const failure = recordFailedAttempt("member", matchedUser.id);
+      return {
+        success: false,
+        message: "Invalid name or password.",
+        ...failure,
+      };
+    }
+
+    clearLoginAttempts(getAttemptsKey("member", matchedUser.id));
+    localStorage.setItem(LOCAL_USER_ID_KEY, matchedUser.id);
+    setCurrentUser(matchedUser);
+    setIsAdmin(false);
+    router.push("/");
+    return { success: true };
   };
 
   // --- Admin login ---
@@ -489,7 +677,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Store user ID, set current user state immediately
         localStorage.setItem(LOCAL_USER_ID_KEY, pendingUserId);
         setCurrentUser(appUser);
-        setIsAdmin(false);
+        setIsAdmin(pendingUserId === "admin");
         router.push("/");
       } else {
         throw new Error("Could not find user data after authentication.");
@@ -575,7 +763,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isDataLoading,
     isAppConfigured,
     appConfig,
+    activeGroupId,
+    availableGroups,
     users,
+    loginWithCredentials,
     login,
     verifyPin,
     savePhoneNumberAndSendOtp,
@@ -584,6 +775,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateUserCredential,
     registerMember,
     refreshAppSetup,
+    refreshGroupDirectory,
+    selectGroup,
+    clearSelectedGroup,
     getLockoutTime,
     getToken,
   };

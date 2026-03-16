@@ -91,8 +91,7 @@ function generateGroupIdForSetup(groupName: string): string {
 export default function SetupPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { isAuthLoading, isAppConfigured, appConfig, refreshAppSetup } =
-    useAuth();
+  const { isAuthLoading, refreshAppSetup } = useAuth();
 
   const [currentStep, setCurrentStep] = useState<SetupStep>("group");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,12 +115,6 @@ export default function SetupPage() {
   const [adminOtpConfirmation, setAdminOtpConfirmation] =
     useState<ConfirmationResult | null>(null);
   const setupRecaptchaRef = useRef<RecaptchaVerifier | null>(null);
-
-  useEffect(() => {
-    if (!isAuthLoading && isAppConfigured) {
-      router.push("/login");
-    }
-  }, [isAuthLoading, isAppConfigured, router]);
 
   const stepIndex = setupSteps.indexOf(currentStep);
 
@@ -437,7 +430,6 @@ export default function SetupPage() {
   };
 
   if (isAuthLoading) return null;
-  if (isAppConfigured && appConfig?.initialized) return null;
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden p-4 md:p-8">

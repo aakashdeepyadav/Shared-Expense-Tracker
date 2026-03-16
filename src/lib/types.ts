@@ -66,6 +66,15 @@ export type MemberSignupInput = {
   memberType?: string;
 };
 
+export type GroupDirectoryEntry = {
+  id: string;
+  groupName: string;
+  groupImageUrl?: string;
+  memberTypeLabel?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type Expense = {
   id: string;
   description: string;

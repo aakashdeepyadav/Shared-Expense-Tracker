@@ -29,12 +29,15 @@ import type {
   MemberSignupInput,
   MonthArchive,
   MonthArchiveSummary,
+  GroupDirectoryEntry,
 } from './types';
 import { FirestorePermissionError } from './errors';
 import { errorEmitter } from './error-emitter';
 
 const DEFAULT_AVATAR = 'https://placehold.co/128x128/png?text=User';
 const ARCHIVE_RETENTION_DAYS = 365;
+const ACTIVE_GROUP_STORAGE_KEY = 'shared-expense-tracker-groupid';
+let inMemoryActiveGroupId: string | null = null;
 
 function sanitizeMemberId(value: string): string {
   const normalized = value
@@ -43,6 +46,15 @@ function sanitizeMemberId(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return normalized || `member-${Date.now().toString(36)}`;
+}
+
+function sanitizeGroupId(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized;
 }
 
 function normalizeIndianPhoneNumber(phoneNumber?: string): string | undefined {
@@ -67,11 +79,114 @@ function generateGroupId(groupName: string): string {
   return `${slug || 'group'}-${suffix}`;
 }
 
-export async function addAdminAuditLog(entry: {
-  action: string;
-  metadata?: Record<string, unknown>;
-}): Promise<void> {
-  const auditCol = collection(db, 'auditLogs');
+function isBrowser(): boolean {
+  return typeof window !== 'undefined';
+}
+
+function groupRootDoc(groupId: string) {
+  return doc(db, 'groups', groupId);
+}
+
+function groupConfigDoc(groupId: string, configId: 'app' | 'admin') {
+  return doc(db, 'groups', groupId, 'config', configId);
+}
+
+function groupCollection(groupId: string, collectionName: string) {
+  return collection(db, 'groups', groupId, collectionName);
+}
+
+function resolveGroupId(groupId?: string): string {
+  const resolved = sanitizeGroupId(groupId || getActiveGroupId() || '');
+  if (!resolved) {
+    throw new Error('No active group selected. Please join or create a group first.');
+  }
+  return resolved;
+}
+
+export function getActiveGroupId(): string | null {
+  if (isBrowser()) {
+    try {
+      return localStorage.getItem(ACTIVE_GROUP_STORAGE_KEY);
+    } catch {
+      return inMemoryActiveGroupId;
+    }
+  }
+  return inMemoryActiveGroupId;
+}
+
+export function setActiveGroupId(groupId: string): void {
+  const sanitized = sanitizeGroupId(groupId);
+  if (!sanitized) {
+    throw new Error('Group ID is required.');
+  }
+  inMemoryActiveGroupId = sanitized;
+  if (isBrowser()) {
+    try {
+      localStorage.setItem(ACTIVE_GROUP_STORAGE_KEY, sanitized);
+    } catch (error) {
+      console.error('Could not persist active group ID in localStorage', error);
+    }
+  }
+}
+
+export function clearActiveGroupId(): void {
+  inMemoryActiveGroupId = null;
+  if (isBrowser()) {
+    try {
+      localStorage.removeItem(ACTIVE_GROUP_STORAGE_KEY);
+    } catch (error) {
+      console.error('Could not clear active group ID from localStorage', error);
+    }
+  }
+}
+
+export async function getGroupDirectory(): Promise<GroupDirectoryEntry[]> {
+  const groupsCol = collection(db, 'groups');
+  const q = query(groupsCol, orderBy('groupName', 'asc'));
+  try {
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .filter((entry) => (entry.data().initialized as boolean) === true)
+      .map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          groupName: (data.groupName as string) || 'Unnamed Group',
+          groupImageUrl: (data.groupImageUrl as string) || undefined,
+          memberTypeLabel: (data.memberTypeLabel as string) || 'member',
+          createdAt: (data.createdAt as string) || undefined,
+          updatedAt: (data.updatedAt as string) || undefined,
+        } satisfies GroupDirectoryEntry;
+      });
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: groupsCol.path,
+      operation: 'list',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function selectGroupById(groupId: string): Promise<AppConfig> {
+  const selectedGroupId = resolveGroupId(groupId);
+  const appConfig = await getAppConfig(selectedGroupId);
+  if (!appConfig?.initialized) {
+    throw new Error('Selected group does not exist or setup is incomplete.');
+  }
+  setActiveGroupId(selectedGroupId);
+  return appConfig;
+}
+
+export async function addAdminAuditLog(
+  entry: {
+    action: string;
+    metadata?: Record<string, unknown>;
+  },
+  groupId?: string,
+): Promise<void> {
+  const resolvedGroupId = resolveGroupId(groupId);
+  const auditCol = groupCollection(resolvedGroupId, 'auditLogs');
   const dataToSave = {
     actorId: 'admin',
     action: entry.action,
@@ -95,8 +210,13 @@ export async function addAdminAuditLog(entry: {
   }
 }
 
-export async function getAppConfig(): Promise<AppConfig | null> {
-  const configDocRef = doc(db, 'config', 'app');
+export async function getAppConfig(groupId?: string): Promise<AppConfig | null> {
+  const activeGroupId = groupId || getActiveGroupId();
+  if (!activeGroupId) {
+    return null;
+  }
+
+  const configDocRef = groupConfigDoc(resolveGroupId(activeGroupId), 'app');
   try {
     const configDoc = await getDoc(configDocRef);
     if (!configDoc.exists()) {
@@ -119,14 +239,6 @@ export async function isAppInitialized(): Promise<boolean> {
 }
 
 export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<string> {
-  const appConfigRef = doc(db, 'config', 'app');
-  const adminConfigRef = doc(db, 'config', 'admin');
-
-  const existingConfig = await getDoc(appConfigRef);
-  if (existingConfig.exists() && existingConfig.data()?.initialized) {
-    throw new Error('Tracker is already initialized for this project.');
-  }
-
   if (!payload.groupName.trim()) {
     throw new Error('Group name is required.');
   }
@@ -158,6 +270,31 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     throw new Error('Admin password must be at least 8 characters.');
   }
 
+  let groupId = sanitizeGroupId(payload.groupId || generateGroupId(payload.groupName));
+  if (!groupId) {
+    groupId = generateGroupId(payload.groupName);
+  }
+
+  // Ensure we never overwrite an existing group.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const rootSnapshot = await getDoc(groupRootDoc(groupId));
+    if (!rootSnapshot.exists()) {
+      break;
+    }
+    if ((rootSnapshot.data()?.initialized as boolean) === true) {
+      groupId = generateGroupId(payload.groupName);
+    }
+  }
+
+  const rootRef = groupRootDoc(groupId);
+  const appConfigRef = groupConfigDoc(groupId, 'app');
+  const adminConfigRef = groupConfigDoc(groupId, 'admin');
+
+  const existingConfig = await getDoc(appConfigRef);
+  if (existingConfig.exists() && existingConfig.data()?.initialized) {
+    throw new Error('This group ID is already initialized. Please try a different group.');
+  }
+
   const batch = writeBatch(db);
   const usedIds = new Set<string>();
 
@@ -175,7 +312,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
       return;
     }
 
-    const userDocRef = doc(db, 'users', nextId);
+    const userDocRef = doc(db, 'groups', groupId, 'users', nextId);
     batch.set(userDocRef, {
       name: member.name,
       avatarUrl: member.avatarUrl,
@@ -196,8 +333,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   });
 
   const nowIso = new Date().toISOString();
-  const groupId = payload.groupId || generateGroupId(payload.groupName);
-  batch.set(appConfigRef, {
+  const appConfigPayload = {
     initialized: true,
     groupId,
     groupName: payload.groupName.trim(),
@@ -211,14 +347,26 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     currentPeriodStart: nowIso,
     createdAt: nowIso,
     updatedAt: nowIso,
+  };
+
+  batch.set(rootRef, {
+    initialized: true,
+    groupName: payload.groupName.trim(),
+    groupImageUrl: payload.groupImageUrl || null,
+    memberTypeLabel: payload.memberTypeLabel || 'member',
+    createdAt: nowIso,
+    updatedAt: nowIso,
   });
+
+  batch.set(appConfigRef, appConfigPayload);
 
   try {
     await batch.commit();
+    setActiveGroupId(groupId);
     return groupId;
   } catch (error) {
     const permissionError = new FirestorePermissionError({
-      path: 'config/app + config/admin + users',
+      path: `groups/${groupId}/config + users`,
       operation: 'create',
     });
     errorEmitter.emit('permission-error', permissionError);
@@ -227,6 +375,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
 }
 
 export async function createMemberFromSignup(input: MemberSignupInput): Promise<User> {
+  const resolvedGroupId = resolveGroupId();
   const name = input.name.trim();
   if (!name) {
     throw new Error('Name is required.');
@@ -258,7 +407,7 @@ export async function createMemberFromSignup(input: MemberSignupInput): Promise<
     memberType: input.memberType || 'member',
   };
 
-  const userDocRef = doc(db, 'users', memberId);
+  const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', memberId);
   try {
     await setDoc(userDocRef, userRecord);
     return { id: memberId, ...userRecord };
@@ -275,8 +424,9 @@ export async function createMemberFromSignup(input: MemberSignupInput): Promise<
 
 // --- User Functions ---
 
-async function getAdminAsUser(): Promise<User | null> {
-  const adminConfigRef = doc(db, 'config', 'admin');
+async function getAdminAsUser(groupId?: string): Promise<User | null> {
+  const resolvedGroupId = resolveGroupId(groupId);
+  const adminConfigRef = groupConfigDoc(resolvedGroupId, 'admin');
   const adminSnapshot = await getDoc(adminConfigRef);
   if (!adminSnapshot.exists()) {
     return null;
@@ -293,46 +443,50 @@ async function getAdminAsUser(): Promise<User | null> {
 }
 
 export function subscribeToUsers(callback: (users: User[]) => void): () => void {
-  const usersCol = collection(db, 'users');
+  const resolvedGroupId = resolveGroupId();
+  const usersCol = groupCollection(resolvedGroupId, 'users');
   const q = query(usersCol, orderBy('name', 'asc'));
-  const unsubscribe = onSnapshot(q, async (snapshot) => {
-    const userList = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() } as User));
+  const unsubscribe = onSnapshot(
+    q,
+    async (snapshot) => {
+      const userList = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as User);
 
-    const hasAdminInUsers = userList.some((user) => user.id === 'admin');
-    if (!hasAdminInUsers) {
-      try {
-        const adminUser = await getAdminAsUser();
-        if (adminUser) {
-          userList.push(adminUser);
+      const hasAdminInUsers = userList.some((user) => user.id === 'admin');
+      if (!hasAdminInUsers) {
+        try {
+          const adminUser = await getAdminAsUser(resolvedGroupId);
+          if (adminUser) {
+            userList.push(adminUser);
+          }
+        } catch {
+          // Keep member list functional even if admin profile lookup fails.
         }
-      } catch {
-        // Keep member list functional even if admin profile lookup fails.
       }
-    }
 
-    callback(userList.sort((a, b) => a.name.localeCompare(b.name)));
-  }, () => {
-    const permissionError = new FirestorePermissionError({
-      path: usersCol.path,
-      operation: 'list',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    callback([]);
-  });
+      callback(userList.sort((a, b) => a.name.localeCompare(b.name)));
+    },
+    () => {
+      const permissionError = new FirestorePermissionError({
+        path: usersCol.path,
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      callback([]);
+    },
+  );
   return unsubscribe;
 }
 
-
 export async function getAllUsers(): Promise<User[]> {
-  const usersCol = collection(db, 'users');
+  const resolvedGroupId = resolveGroupId();
+  const usersCol = groupCollection(resolvedGroupId, 'users');
   try {
     const userSnapshot = await getDocs(usersCol);
-    const userList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    const userList = userSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }) as User);
 
     const hasAdminInUsers = userList.some((user) => user.id === 'admin');
     if (!hasAdminInUsers) {
-      const adminUser = await getAdminAsUser();
+      const adminUser = await getAdminAsUser(resolvedGroupId);
       if (adminUser) {
         userList.push(adminUser);
       }
@@ -341,8 +495,8 @@ export async function getAllUsers(): Promise<User[]> {
     return userList.sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     const permissionError = new FirestorePermissionError({
-        path: usersCol.path,
-        operation: 'list',
+      path: usersCol.path,
+      operation: 'list',
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;
@@ -350,115 +504,119 @@ export async function getAllUsers(): Promise<User[]> {
 }
 
 export async function getUser(id: string): Promise<User | null> {
-    const userDocRef = doc(db, 'users', id);
-    try {
-        if (id === 'admin') {
-            const configDocRef = doc(db, 'config', 'admin');
-            const configDoc = await getDoc(configDocRef);
-            if (configDoc.exists()) {
-              const data = configDoc.data();
-              return {
-                id: 'admin',
-                name: data.name || 'Admin',
-                avatarUrl: data.avatarUrl || DEFAULT_AVATAR,
-                pin: data.pin || '',
-                phoneNumber: data.phoneNumber || undefined,
-                memberType: data.memberType || 'member',
-              };
-            }
-            return { id: 'admin', name: 'Admin', avatarUrl: DEFAULT_AVATAR, pin: '' };
-        }
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-            return { id: userDoc.id, ...userDoc.data() } as User;
-        }
-        return null;
-    } catch (error) {
-        const permissionError = new FirestorePermissionError({
-            path: userDocRef.path,
-            operation: 'get',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw error;
+  const resolvedGroupId = resolveGroupId();
+  const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', id);
+  try {
+    if (id === 'admin') {
+      const configDocRef = groupConfigDoc(resolvedGroupId, 'admin');
+      const configDoc = await getDoc(configDocRef);
+      if (configDoc.exists()) {
+        const data = configDoc.data();
+        return {
+          id: 'admin',
+          name: (data.name as string) || 'Admin',
+          avatarUrl: (data.avatarUrl as string) || DEFAULT_AVATAR,
+          pin: (data.pin as string) || '',
+          phoneNumber: (data.phoneNumber as string) || undefined,
+          memberType: (data.memberType as string) || 'member',
+        };
+      }
+      return { id: 'admin', name: 'Admin', avatarUrl: DEFAULT_AVATAR, pin: '' };
     }
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+      return { id: userDoc.id, ...userDoc.data() } as User;
+    }
+    return null;
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: userDocRef.path,
+      operation: 'get',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
 }
 
 export async function updateUserCredential(userId: string, newCredential: string, isAdmin: boolean): Promise<void> {
-    if (isAdmin) {
-        const configDocRef = doc(db, 'config', 'admin');
+  const resolvedGroupId = resolveGroupId();
+  if (isAdmin) {
+    const configDocRef = groupConfigDoc(resolvedGroupId, 'admin');
     try {
       await updateDoc(configDocRef, { password: newCredential });
     } catch (error) {
-            const permissionError = new FirestorePermissionError({
-              path: configDocRef.path,
-              operation: 'update',
-              requestResourceData: { password: 'REDACTED' },
-            });
-            errorEmitter.emit('permission-error', permissionError);
+      const permissionError = new FirestorePermissionError({
+        path: configDocRef.path,
+        operation: 'update',
+        requestResourceData: { password: 'REDACTED' },
+      });
+      errorEmitter.emit('permission-error', permissionError);
       throw error;
     }
-    } else {
-        const userDocRef = doc(db, 'users', userId);
+  } else {
+    const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', userId);
     try {
       await updateDoc(userDocRef, { pin: newCredential });
     } catch (error) {
-            const permissionError = new FirestorePermissionError({
-              path: userDocRef.path,
-              operation: 'update',
-              requestResourceData: { pin: 'REDACTED' },
-            });
-            errorEmitter.emit('permission-error', permissionError);
+      const permissionError = new FirestorePermissionError({
+        path: userDocRef.path,
+        operation: 'update',
+        requestResourceData: { pin: 'REDACTED' },
+      });
+      errorEmitter.emit('permission-error', permissionError);
       throw error;
     }
-    }
+  }
 }
 
 export async function updateUserPhoneNumber(userId: string, phoneNumber: string): Promise<void> {
-    if (!userId) throw new Error("User ID is required.");
+  const resolvedGroupId = resolveGroupId();
+  if (!userId) throw new Error('User ID is required.');
 
-    if (userId === 'admin') {
-      const adminConfigRef = doc(db, 'config', 'admin');
-      try {
-        await updateDoc(adminConfigRef, { phoneNumber });
-        return;
-      } catch (error) {
-        const permissionError = new FirestorePermissionError({
-          path: adminConfigRef.path,
-          operation: 'update',
-          requestResourceData: { phoneNumber },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw error;
-      }
+  if (userId === 'admin') {
+    const adminConfigRef = groupConfigDoc(resolvedGroupId, 'admin');
+    try {
+      await updateDoc(adminConfigRef, { phoneNumber });
+      return;
+    } catch (error) {
+      const permissionError = new FirestorePermissionError({
+        path: adminConfigRef.path,
+        operation: 'update',
+        requestResourceData: { phoneNumber },
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      throw error;
     }
+  }
 
-    const userDocRef = doc(db, 'users', userId);
+  const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', userId);
   try {
-    await updateDoc(userDocRef, { phoneNumber: phoneNumber });
+    await updateDoc(userDocRef, { phoneNumber });
   } catch (error) {
-        const permissionError = new FirestorePermissionError({
-            path: userDocRef.path,
-            operation: 'update',
-            requestResourceData: { phoneNumber },
-        });
-        errorEmitter.emit('permission-error', permissionError);
+    const permissionError = new FirestorePermissionError({
+      path: userDocRef.path,
+      operation: 'update',
+      requestResourceData: { phoneNumber },
+    });
+    errorEmitter.emit('permission-error', permissionError);
     throw error;
   }
 }
 
 // --- Admin Password Functions ---
 export async function getAdminPassword(): Promise<string | null> {
-  const configDocRef = doc(db, 'config', 'admin');
+  const resolvedGroupId = resolveGroupId();
+  const configDocRef = groupConfigDoc(resolvedGroupId, 'admin');
   try {
     const configDoc = await getDoc(configDocRef);
     if (configDoc.exists()) {
-        return configDoc.data().password;
+      return configDoc.data().password;
     }
     return null;
-  } catch(error) {
+  } catch (error) {
     const permissionError = new FirestorePermissionError({
-        path: configDocRef.path,
-        operation: 'get',
+      path: configDocRef.path,
+      operation: 'get',
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;
@@ -467,111 +625,132 @@ export async function getAdminPassword(): Promise<string | null> {
 
 // --- Expense Functions ---
 export function subscribeToExpenses(
-  count: number, 
+  count: number,
   callback: (expenses: Expense[]) => void,
-  lastVisible?: Expense
+  lastVisible?: Expense,
 ): () => void {
-  const expensesCol = collection(db, 'expenses');
+  const resolvedGroupId = resolveGroupId();
+  const expensesCol = groupCollection(resolvedGroupId, 'expenses');
   let q = query(expensesCol, orderBy('date', 'desc'), limit(count));
 
   if (lastVisible) {
-    q = query(expensesCol, orderBy('date', 'desc'), startAfter(Timestamp.fromMillis(Date.parse(lastVisible.date))), limit(count));
+    q = query(
+      expensesCol,
+      orderBy('date', 'desc'),
+      startAfter(Timestamp.fromMillis(Date.parse(lastVisible.date))),
+      limit(count),
+    );
   }
-  
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const expenseList = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        date: (data.date as Timestamp).toDate().toISOString(),
-      } as Expense;
-    });
-    callback(expenseList);
-  }, () => {
-    const permissionError = new FirestorePermissionError({
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const expenseList = snapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ...data,
+          date: (data.date as Timestamp).toDate().toISOString(),
+        } as Expense;
+      });
+      callback(expenseList);
+    },
+    () => {
+      const permissionError = new FirestorePermissionError({
         path: expensesCol.path,
         operation: 'list',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    callback([]);
-  });
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      callback([]);
+    },
+  );
 
   return unsubscribe;
 }
 
-
-export async function addExpense(expenseData: Omit<Expense, 'id'| 'date'> & { date: Date }): Promise<void> {
-  const expenseCol = collection(db, 'expenses');
+export async function addExpense(expenseData: Omit<Expense, 'id' | 'date'> & { date: Date }): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  const expenseCol = groupCollection(resolvedGroupId, 'expenses');
   const dataToSave = {
-      ...expenseData,
-      date: Timestamp.fromDate(expenseData.date)
+    ...expenseData,
+    date: Timestamp.fromDate(expenseData.date),
   };
   try {
     await addDoc(expenseCol, dataToSave);
   } catch (error) {
-      const permissionError = new FirestorePermissionError({
-        path: expenseCol.path,
-        operation: 'create',
-        requestResourceData: dataToSave,
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      throw error;
+    const permissionError = new FirestorePermissionError({
+      path: expenseCol.path,
+      operation: 'create',
+      requestResourceData: dataToSave,
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
   }
 }
 
-
 // --- Contribution Functions ---
 export function subscribeToContributions(
-  count: number, 
+  count: number,
   callback: (contributions: Contribution[]) => void,
-  lastVisible?: Contribution
+  lastVisible?: Contribution,
 ): () => void {
-  const contributionsCol = collection(db, 'contributions');
+  const resolvedGroupId = resolveGroupId();
+  const contributionsCol = groupCollection(resolvedGroupId, 'contributions');
   let q = query(contributionsCol, orderBy('date', 'desc'), limit(count));
 
   if (lastVisible) {
-     q = query(contributionsCol, orderBy('date', 'desc'), startAfter(Timestamp.fromMillis(Date.parse(lastVisible.date))), limit(count));
+    q = query(
+      contributionsCol,
+      orderBy('date', 'desc'),
+      startAfter(Timestamp.fromMillis(Date.parse(lastVisible.date))),
+      limit(count),
+    );
   }
-    
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const contributionList = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
-      } as Contribution;
-    });
-    callback(contributionList);
-  }, () => {
-    const permissionError = new FirestorePermissionError({
-      path: contributionsCol.path,
-      operation: 'list',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    callback([]);
-  });
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const contributionList = snapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ...data,
+          date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
+        } as Contribution;
+      });
+      callback(contributionList);
+    },
+    () => {
+      const permissionError = new FirestorePermissionError({
+        path: contributionsCol.path,
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      callback([]);
+    },
+  );
 
   return unsubscribe;
 }
 
-
-export async function addContribution(contributionData: Omit<Contribution, 'id' | 'date'> & { date: Date }): Promise<void> {
-    const contributionCol = collection(db, 'contributions');
-    const dataToSave = {
-        ...contributionData,
-        date: Timestamp.fromDate(contributionData.date)
-    };
+export async function addContribution(
+  contributionData: Omit<Contribution, 'id' | 'date'> & { date: Date },
+): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  const contributionCol = groupCollection(resolvedGroupId, 'contributions');
+  const dataToSave = {
+    ...contributionData,
+    date: Timestamp.fromDate(contributionData.date),
+  };
   try {
     await addDoc(contributionCol, dataToSave);
   } catch (error) {
-        const permissionError = new FirestorePermissionError({
-            path: contributionCol.path,
-            operation: 'create',
-            requestResourceData: dataToSave,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+    const permissionError = new FirestorePermissionError({
+      path: contributionCol.path,
+      operation: 'create',
+      requestResourceData: dataToSave,
+    });
+    errorEmitter.emit('permission-error', permissionError);
     throw error;
   }
 }
@@ -579,34 +758,40 @@ export async function addContribution(contributionData: Omit<Contribution, 'id' 
 // --- Chat Functions ---
 
 export function subscribeToMessages(callback: (messages: ChatMessage[]) => void): () => void {
-  const messagesCol = collection(db, 'messages');
-  const q = query(messagesCol, orderBy('timestamp', 'asc'), limit(100)); // Get last 100 messages
+  const resolvedGroupId = resolveGroupId();
+  const messagesCol = groupCollection(resolvedGroupId, 'messages');
+  const q = query(messagesCol, orderBy('timestamp', 'asc'), limit(100));
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const messageList = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        timestamp: (data.timestamp as Timestamp).toDate().toISOString(),
-        readBy: data.readBy || [],
-      } as ChatMessage;
-    });
-    callback(messageList);
-  }, () => {
-    const permissionError = new FirestorePermissionError({
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const messageList = snapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ...data,
+          timestamp: (data.timestamp as Timestamp).toDate().toISOString(),
+          readBy: (data.readBy as string[]) || [],
+        } as ChatMessage;
+      });
+      callback(messageList);
+    },
+    () => {
+      const permissionError = new FirestorePermissionError({
         path: messagesCol.path,
         operation: 'list',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    callback([]);
-  });
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      callback([]);
+    },
+  );
 
   return unsubscribe;
 }
 
 export async function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp' | 'readBy'>): Promise<void> {
-  const messagesCol = collection(db, 'messages');
+  const resolvedGroupId = resolveGroupId();
+  const messagesCol = groupCollection(resolvedGroupId, 'messages');
   const dataToSave = {
     ...message,
     timestamp: Timestamp.now(),
@@ -616,9 +801,9 @@ export async function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp' |
     await addDoc(messagesCol, dataToSave);
   } catch (error) {
     const permissionError = new FirestorePermissionError({
-        path: messagesCol.path,
-        operation: 'create',
-        requestResourceData: dataToSave,
+      path: messagesCol.path,
+      operation: 'create',
+      requestResourceData: dataToSave,
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;
@@ -630,7 +815,8 @@ export function subscribeToAuditLogs(
   callback: (logs: AuditLogEntry[]) => void,
   lastVisible?: AuditLogEntry,
 ): () => void {
-  const auditCol = collection(db, 'auditLogs');
+  const resolvedGroupId = resolveGroupId();
+  const auditCol = groupCollection(resolvedGroupId, 'auditLogs');
   let q = query(auditCol, orderBy('timestamp', 'desc'), limit(count));
 
   if (lastVisible) {
@@ -645,10 +831,10 @@ export function subscribeToAuditLogs(
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      const logList = snapshot.docs.map((doc) => {
-        const data = doc.data();
+      const logList = snapshot.docs.map((entry) => {
+        const data = entry.data();
         return {
-          id: doc.id,
+          id: entry.id,
           actorId: (data.actorId as string) || 'admin',
           action: (data.action as string) || 'unknown',
           metadata: (data.metadata as Record<string, unknown> | null) || null,
@@ -672,36 +858,38 @@ export function subscribeToAuditLogs(
 
 export async function markMessagesAsRead(messageIds: string[], userId: string): Promise<void> {
   if (messageIds.length === 0) return;
+  const resolvedGroupId = resolveGroupId();
   const batch = writeBatch(db);
-  messageIds.forEach(id => {
-    const messageRef = doc(db, 'messages', id);
+  messageIds.forEach((id) => {
+    const messageRef = doc(db, 'groups', resolvedGroupId, 'messages', id);
     batch.update(messageRef, {
-      readBy: arrayUnion(userId)
+      readBy: arrayUnion(userId),
     });
   });
   try {
     await batch.commit();
   } catch (error) {
-      const permissionError = new FirestorePermissionError({
-        path: 'messages/[multiple]',
-        operation: 'update',
-        requestResourceData: { readBy: `arrayUnion(${userId})` },
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      throw error;
+    const permissionError = new FirestorePermissionError({
+      path: `groups/${resolvedGroupId}/messages/[multiple]`,
+      operation: 'update',
+      requestResourceData: { readBy: `arrayUnion(${userId})` },
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
   }
 }
 
 // --- Report & Archive Data Functions ---
 export async function getAllExpensesForReport(): Promise<Expense[]> {
-  const expensesCol = collection(db, 'expenses');
+  const resolvedGroupId = resolveGroupId();
+  const expensesCol = groupCollection(resolvedGroupId, 'expenses');
   const q = query(expensesCol, orderBy('date', 'asc'));
   try {
     const expenseSnapshot = await getDocs(q);
-    return expenseSnapshot.docs.map(doc => {
-      const data = doc.data();
+    return expenseSnapshot.docs.map((entry) => {
+      const data = entry.data();
       return {
-        id: doc.id,
+        id: entry.id,
         ...data,
         date: (data.date as Timestamp).toDate().toISOString(),
       } as Expense;
@@ -714,14 +902,15 @@ export async function getAllExpensesForReport(): Promise<Expense[]> {
 }
 
 export async function getAllContributionsForReport(): Promise<Contribution[]> {
-    const contributionsCol = collection(db, 'contributions');
-    const q = query(contributionsCol, orderBy('date', 'asc'));
+  const resolvedGroupId = resolveGroupId();
+  const contributionsCol = groupCollection(resolvedGroupId, 'contributions');
+  const q = query(contributionsCol, orderBy('date', 'asc'));
   try {
     const contributionSnapshot = await getDocs(q);
-    return contributionSnapshot.docs.map(doc => {
-      const data = doc.data();
+    return contributionSnapshot.docs.map((entry) => {
+      const data = entry.data();
       return {
-        id: doc.id,
+        id: entry.id,
         ...data,
         date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
       } as Contribution;
@@ -734,17 +923,18 @@ export async function getAllContributionsForReport(): Promise<Contribution[]> {
 }
 
 export async function getAllChatMessages(): Promise<ChatMessage[]> {
-    const messagesCol = collection(db, 'messages');
-    const q = query(messagesCol, orderBy('timestamp', 'asc'));
+  const resolvedGroupId = resolveGroupId();
+  const messagesCol = groupCollection(resolvedGroupId, 'messages');
+  const q = query(messagesCol, orderBy('timestamp', 'asc'));
   try {
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
-      const data = doc.data();
+    return snapshot.docs.map((entry) => {
+      const data = entry.data();
       return {
-        id: doc.id,
+        id: entry.id,
         ...data,
         timestamp: (data.timestamp as Timestamp).toDate().toISOString(),
-        readBy: data.readBy || [],
+        readBy: (data.readBy as string[]) || [],
       } as ChatMessage;
     });
   } catch (error) {
@@ -755,29 +945,31 @@ export async function getAllChatMessages(): Promise<ChatMessage[]> {
 }
 
 export async function clearAllData(): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
   const collectionsToClear = ['expenses', 'contributions', 'messages'];
   const batch = writeBatch(db);
-  
+
   try {
-      for (const collectionName of collectionsToClear) {
-        const snapshot = await getDocs(collection(db, collectionName));
-        snapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-      }
-      await batch.commit();
-  } catch (error) {
-      const permissionError = new FirestorePermissionError({
-          path: `[${collectionsToClear.join(', ')}]`,
-          operation: 'delete',
+    for (const collectionName of collectionsToClear) {
+      const snapshot = await getDocs(groupCollection(resolvedGroupId, collectionName));
+      snapshot.docs.forEach((entry) => {
+        batch.delete(entry.ref);
       });
-      errorEmitter.emit('permission-error', permissionError);
-      throw error;
+    }
+    await batch.commit();
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: `groups/${resolvedGroupId}/[${collectionsToClear.join(', ')}]`,
+      operation: 'delete',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
   }
 }
 
 export async function getMonthArchives(): Promise<MonthArchiveSummary[]> {
-  const archivesCol = collection(db, 'monthArchives');
+  const resolvedGroupId = resolveGroupId();
+  const archivesCol = groupCollection(resolvedGroupId, 'monthArchives');
   const q = query(archivesCol, orderBy('periodEnd', 'desc'));
   try {
     const snapshot = await getDocs(q);
@@ -809,10 +1001,9 @@ export async function getMonthArchives(): Promise<MonthArchiveSummary[]> {
   }
 }
 
-export async function getMonthArchiveById(
-  archiveId: string,
-): Promise<MonthArchive | null> {
-  const archiveRef = doc(db, 'monthArchives', archiveId);
+export async function getMonthArchiveById(archiveId: string): Promise<MonthArchive | null> {
+  const resolvedGroupId = resolveGroupId();
+  const archiveRef = doc(db, 'groups', resolvedGroupId, 'monthArchives', archiveId);
   try {
     const snapshot = await getDoc(archiveRef);
     if (!snapshot.exists()) {
@@ -856,6 +1047,7 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
     getAllChatMessages(),
   ]);
 
+  const resolvedGroupId = resolveGroupId(appConfig?.groupId);
   const now = new Date();
   const nowIso = now.toISOString();
   const periodStart = appConfig?.currentPeriodStart || appConfig?.createdAt || nowIso;
@@ -864,9 +1056,9 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
     ? `Period ending ${now.toLocaleDateString()}`
     : `${periodStartDate.toLocaleString('en-US', { month: 'short' })} ${periodStartDate.getFullYear()}`;
 
-  const archiveRef = doc(collection(db, 'monthArchives'));
+  const archiveRef = doc(groupCollection(resolvedGroupId, 'monthArchives'));
   const archivesData = {
-    groupId: appConfig?.groupId || null,
+    groupId: appConfig?.groupId || resolvedGroupId,
     periodLabel,
     periodStart,
     periodEnd: nowIso,
@@ -879,14 +1071,16 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
     messages,
   };
 
-  const appConfigRef = doc(db, 'config', 'app');
+  const appConfigRef = groupConfigDoc(resolvedGroupId, 'app');
   const collectionsToClear = ['expenses', 'contributions', 'messages'];
   const batch = writeBatch(db);
   batch.set(archiveRef, archivesData);
 
-  const retentionCutoff = new Date(now.getTime() - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const retentionCutoff = new Date(
+    now.getTime() - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
   const oldArchivesQuery = query(
-    collection(db, 'monthArchives'),
+    groupCollection(resolvedGroupId, 'monthArchives'),
     where('archivedAt', '<', Timestamp.fromDate(retentionCutoff)),
   );
   const oldArchivesSnapshot = await getDocs(oldArchivesQuery);
@@ -899,10 +1093,14 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
       currentPeriodStart: nowIso,
       updatedAt: nowIso,
     });
+
+    batch.update(groupRootDoc(resolvedGroupId), {
+      updatedAt: nowIso,
+    });
   }
 
   for (const collectionName of collectionsToClear) {
-    const snapshot = await getDocs(collection(db, collectionName));
+    const snapshot = await getDocs(groupCollection(resolvedGroupId, collectionName));
     snapshot.docs.forEach((entry) => {
       batch.delete(entry.ref);
     });
@@ -912,7 +1110,7 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
     await batch.commit();
     return {
       id: archiveRef.id,
-      groupId: appConfig?.groupId,
+      groupId: appConfig?.groupId || resolvedGroupId,
       periodLabel,
       periodStart,
       periodEnd: nowIso,
@@ -923,12 +1121,10 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
     };
   } catch (error) {
     const permissionError = new FirestorePermissionError({
-      path: 'monthArchives + config/app + live collections',
+      path: `groups/${resolvedGroupId}/monthArchives + config/app + live collections`,
       operation: 'create',
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;
   }
 }
-
-

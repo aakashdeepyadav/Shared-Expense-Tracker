@@ -68,12 +68,12 @@ function AppLayout({
       return;
     }
 
-    if (isAppConfigured && pathname === "/setup") {
-      router.replace(currentUser ? "/" : "/login");
-      return;
-    }
-
-    if (isAppConfigured && !currentUser && pathname !== "/login") {
+    if (
+      isAppConfigured &&
+      !currentUser &&
+      pathname !== "/login" &&
+      pathname !== "/setup"
+    ) {
       router.replace("/login");
     }
   }, [
@@ -107,8 +107,10 @@ function AppLayout({
   if (
     !isAuthLoading &&
     ((!isAppConfigured && !isAuthPage) ||
-      (isAppConfigured && pathname === "/setup") ||
-      (isAppConfigured && !currentUser && pathname !== "/login"))
+      (isAppConfigured &&
+        !currentUser &&
+        pathname !== "/login" &&
+        pathname !== "/setup"))
   ) {
     return (
       <main className="flex min-h-screen w-full items-center justify-center">
