@@ -32,9 +32,23 @@ npm run build
 
 ## Environment Variables
 
-- Required for core app: none (Firebase web config is currently in `src/lib/firebase.ts`).
-- Optional for AI report generation fallback: `GOOGLE_API_KEY`.
-  - Admin can also store a model key through setup/config and the server action uses it at runtime.
+Required for core app (Firebase Web SDK):
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` (optional)
+
+Optional:
+
+- `GOOGLE_API_KEY` for report-generation fallback.
+
+Use `.env.example` as the template for local `.env.local`.
+
+For Vercel deployment, add the same variables in Project Settings -> Environment Variables for Production (and Preview if needed).
 
 ## Firestore Data Model
 
