@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { User } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
 
 export default function SettingsPage() {
   const {
@@ -245,220 +246,230 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="relative overflow-hidden p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
-      <div className="pointer-events-none absolute -left-14 top-6 h-64 w-64 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-500/10" />
-      <div className="pointer-events-none absolute right-0 top-32 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-500/10" />
+    <div className="flex h-screen flex-col">
+      <PageHeader />
+      <main className="relative flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+        <div className="mx-auto w-full max-w-5xl space-y-6 md:space-y-8">
+          <div className="pointer-events-none absolute -left-14 top-6 h-64 w-64 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-500/10" />
+          <div className="pointer-events-none absolute right-0 top-32 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-500/10" />
 
-      <header className="mb-4 animate-fade-up">
-        <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
-          Settings
-        </h1>
-        <p className="text-sm md:text-base text-muted-foreground">
-          Manage your account and app data.
-        </p>
-      </header>
+          <header className="mb-4 animate-fade-up">
+            <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+              Settings
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground">
+              Manage your account and app data.
+            </p>
+          </header>
 
-      <Card className="modern-surface max-w-2xl mx-auto border-0 animate-soft-pop">
-        <CardHeader>
-          <CardTitle>Update Your Credentials</CardTitle>
-          <CardDescription>
-            {isAdmin
-              ? "Update your admin password. It must be at least 8 characters long."
-              : "Update your 6-digit member PIN."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="new-credential">New {credentialType}</Label>
-              <Input
-                id="new-credential"
-                type={inputType}
-                value={newCredential}
-                onChange={(e) =>
-                  setNewCredential(
-                    isAdmin
-                      ? e.target.value
-                      : e.target.value.replace(/\D/g, ""),
-                  )
-                }
-                maxLength={credentialLength}
-                placeholder={`Enter new ${credentialType}`}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-credential">
-                Confirm New {credentialType}
-              </Label>
-              <Input
-                id="confirm-credential"
-                type={inputType}
-                value={confirmCredential}
-                onChange={(e) =>
-                  setConfirmCredential(
-                    isAdmin
-                      ? e.target.value
-                      : e.target.value.replace(/\D/g, ""),
-                  )
-                }
-                maxLength={credentialLength}
-                placeholder={`Confirm new ${credentialType}`}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isUpdating}>
-              {isUpdating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                `Update ${credentialType}`
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {isAdmin && (
-        <>
           <Card className="modern-surface max-w-2xl mx-auto border-0 animate-soft-pop">
             <CardHeader>
-              <CardTitle>Update Member Phone Number</CardTitle>
+              <CardTitle>Update Your Credentials</CardTitle>
               <CardDescription>
-                Change the registered mobile number for a member OTP
-                authentication.
+                {isAdmin
+                  ? "Update your admin password. It must be at least 8 characters long."
+                  : "Update your 6-digit member PIN."}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleUpdatePhoneNumber} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="user-select-phone">Member</Label>
-                  <Select
-                    onValueChange={setSelectedUserId}
-                    value={selectedUserId}
-                    disabled={isDataLoading}
-                  >
-                    <SelectTrigger id="user-select-phone">
-                      <SelectValue placeholder="Select a member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user: User) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name} ({user.phoneNumber || "No number"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="new-credential">New {credentialType}</Label>
+                  <Input
+                    id="new-credential"
+                    type={inputType}
+                    value={newCredential}
+                    onChange={(e) =>
+                      setNewCredential(
+                        isAdmin
+                          ? e.target.value
+                          : e.target.value.replace(/\D/g, ""),
+                      )
+                    }
+                    maxLength={credentialLength}
+                    placeholder={`Enter new ${credentialType}`}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="new-phone-number">New Phone Number</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      +91
-                    </span>
-                    <Input
-                      id="new-phone-number"
-                      type="tel"
-                      value={newPhoneNumber}
-                      onChange={(e) =>
-                        setNewPhoneNumber(e.target.value.replace(/\D/g, ""))
-                      }
-                      placeholder="98765 43210"
-                      maxLength={10}
-                      className="pl-10"
-                      disabled={isUpdatingPhone}
-                    />
-                  </div>
+                  <Label htmlFor="confirm-credential">
+                    Confirm New {credentialType}
+                  </Label>
+                  <Input
+                    id="confirm-credential"
+                    type={inputType}
+                    value={confirmCredential}
+                    onChange={(e) =>
+                      setConfirmCredential(
+                        isAdmin
+                          ? e.target.value
+                          : e.target.value.replace(/\D/g, ""),
+                      )
+                    }
+                    maxLength={credentialLength}
+                    placeholder={`Confirm new ${credentialType}`}
+                  />
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isUpdatingPhone || isDataLoading}
-                >
-                  {isUpdatingPhone ? (
+                <Button type="submit" className="w-full" disabled={isUpdating}>
+                  {isUpdating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Updating...
                     </>
                   ) : (
-                    `Update Phone Number`
+                    `Update ${credentialType}`
                   )}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
-          <Card className="max-w-2xl mx-auto border border-destructive/60 bg-destructive/10 dark:bg-destructive/15 rounded-2xl shadow-md animate-soft-pop">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="h-6 w-6 text-destructive" />
-                <CardTitle>Admin Zone - Danger</CardTitle>
-              </div>
-              <CardDescription>
-                This action archives the current month into Firestore history,
-                then starts a fresh live month. Existing history stays
-                accessible in history pages.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    disabled={isStartingNewMonth}
+          {isAdmin && (
+            <>
+              <Card className="modern-surface max-w-2xl mx-auto border-0 animate-soft-pop">
+                <CardHeader>
+                  <CardTitle>Update Member Phone Number</CardTitle>
+                  <CardDescription>
+                    Change the registered mobile number for a member OTP
+                    authentication.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={handleUpdatePhoneNumber}
+                    className="space-y-4"
                   >
-                    {isStartingNewMonth ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      "Start New Month"
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Are you absolutely sure?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will archive current expenses, contributions, and
-                      chat data into a monthly history record, then clear the
-                      live month. Enter admin password to continue.
-                    </AlertDialogDescription>
                     <div className="space-y-2">
-                      <Label htmlFor="month-reset-password">
-                        Confirm admin password
-                      </Label>
-                      <Input
-                        id="month-reset-password"
-                        type="password"
-                        value={monthResetPassword}
-                        onChange={(e) => setMonthResetPassword(e.target.value)}
-                        placeholder="Enter admin password"
-                        disabled={isStartingNewMonth}
-                      />
+                      <Label htmlFor="user-select-phone">Member</Label>
+                      <Select
+                        onValueChange={setSelectedUserId}
+                        value={selectedUserId}
+                        disabled={isDataLoading}
+                      >
+                        <SelectTrigger id="user-select-phone">
+                          <SelectValue placeholder="Select a member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.map((user: User) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name} ({user.phoneNumber || "No number"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleStartNewMonth}
-                      disabled={
-                        isStartingNewMonth || !monthResetPassword.trim()
-                      }
+                    <div className="space-y-2">
+                      <Label htmlFor="new-phone-number">New Phone Number</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                          +91
+                        </span>
+                        <Input
+                          id="new-phone-number"
+                          type="tel"
+                          value={newPhoneNumber}
+                          onChange={(e) =>
+                            setNewPhoneNumber(e.target.value.replace(/\D/g, ""))
+                          }
+                          placeholder="98765 43210"
+                          maxLength={10}
+                          className="pl-10"
+                          disabled={isUpdatingPhone}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isUpdatingPhone || isDataLoading}
                     >
-                      Yes, start new month
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardFooter>
-          </Card>
-        </>
-      )}
+                      {isUpdatingPhone ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        `Update Phone Number`
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="max-w-2xl mx-auto border border-destructive/60 bg-destructive/10 dark:bg-destructive/15 rounded-2xl shadow-md animate-soft-pop">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <ShieldAlert className="h-6 w-6 text-destructive" />
+                    <CardTitle>Admin Zone - Danger</CardTitle>
+                  </div>
+                  <CardDescription>
+                    This action archives the current month into Firestore
+                    history, then starts a fresh live month. Existing history
+                    stays accessible in history pages.
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="w-full"
+                        disabled={isStartingNewMonth}
+                      >
+                        {isStartingNewMonth ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Start New Month"
+                        )}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Are you absolutely sure?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will archive current expenses, contributions, and
+                          chat data into a monthly history record, then clear
+                          the live month. Enter admin password to continue.
+                        </AlertDialogDescription>
+                        <div className="space-y-2">
+                          <Label htmlFor="month-reset-password">
+                            Confirm admin password
+                          </Label>
+                          <Input
+                            id="month-reset-password"
+                            type="password"
+                            value={monthResetPassword}
+                            onChange={(e) =>
+                              setMonthResetPassword(e.target.value)
+                            }
+                            placeholder="Enter admin password"
+                            disabled={isStartingNewMonth}
+                          />
+                        </div>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleStartNewMonth}
+                          disabled={
+                            isStartingNewMonth || !monthResetPassword.trim()
+                          }
+                        >
+                          Yes, start new month
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </CardFooter>
+              </Card>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE = 20;
 
@@ -138,97 +139,104 @@ export default function ContributionHistoryPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 animate-fade-up">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
-          Contribution History
-        </h1>
-        <p className="text-sm md:text-base text-muted-foreground">
-          {selectedPeriod === "current"
-            ? "Showing current live-month contributions."
-            : "Showing archived month contributions."}
-        </p>
-      </header>
-      <div className="mb-4 max-w-sm">
-        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select timeframe" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="current">Current Month</SelectItem>
-            {archiveSummaries.map((archive) => (
-              <SelectItem key={archive.id} value={archive.id}>
-                {archive.periodLabel}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
-        <CardContent className="p-0 overflow-x-auto">
-          <Table className="min-w-[560px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Contributor</TableHead>
-                <TableHead className="hidden sm:table-cell">Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleContributions.length > 0 ? (
-                visibleContributions.map((contribution) => {
-                  const contributor = userMap.get(contribution.contributorId);
-                  return (
-                    <TableRow key={contribution.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage
-                              src={contributor?.avatarUrl}
-                              alt={contributor?.name}
-                              data-ai-hint="person portrait"
-                            />
-                            <AvatarFallback>
-                              {contributor?.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">
-                            {contributor?.name}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {format(new Date(contribution.date), "dd/MM/yyyy")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(contribution.amount)}
+    <div className="flex h-screen flex-col">
+      <PageHeader />
+      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+        <div className="mx-auto w-full max-w-6xl animate-fade-up">
+          <header className="mb-6">
+            <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+              Contribution History
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground">
+              {selectedPeriod === "current"
+                ? "Showing current live-month contributions."
+                : "Showing archived month contributions."}
+            </p>
+          </header>
+          <div className="mb-4 max-w-sm">
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select timeframe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Current Month</SelectItem>
+                {archiveSummaries.map((archive) => (
+                  <SelectItem key={archive.id} value={archive.id}>
+                    {archive.periodLabel}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[560px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contributor</TableHead>
+                    <TableHead className="hidden sm:table-cell">Date</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleContributions.length > 0 ? (
+                    visibleContributions.map((contribution) => {
+                      const contributor = userMap.get(
+                        contribution.contributorId,
+                      );
+                      return (
+                        <TableRow key={contribution.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage
+                                  src={contributor?.avatarUrl}
+                                  alt={contributor?.name}
+                                  data-ai-hint="person portrait"
+                                />
+                                <AvatarFallback>
+                                  {contributor?.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">
+                                {contributor?.name}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            {format(new Date(contribution.date), "dd/MM/yyyy")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(contribution.amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={3}
+                        className="text-center text-muted-foreground py-8"
+                      >
+                        {isAdmin
+                          ? "No contributions found."
+                          : "No personal contributions found."}
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={3}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    {isAdmin
-                      ? "No contributions found."
-                      : "No personal contributions found."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-        {isAdmin && selectedPeriod === "current" && hasMore && (
-          <CardFooter className="pt-6 justify-center">
-            <Button onClick={handleLoadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? "Loading..." : "Load More"}
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+            {isAdmin && selectedPeriod === "current" && hasMore && (
+              <CardFooter className="pt-6 justify-center">
+                <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                  {isLoadingMore ? "Loading..." : "Load More"}
+                </Button>
+              </CardFooter>
+            )}
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }

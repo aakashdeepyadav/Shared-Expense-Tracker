@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/page-header";
 
 const PAGE_SIZE = 20;
 const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
@@ -147,79 +148,57 @@ export default function ExpenseHistoryPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 animate-fade-up">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
-          Expense History
-        </h1>
-        <p className="text-sm md:text-base text-muted-foreground">
-          {selectedPeriod === "current"
-            ? "Showing current live-month expenses."
-            : "Showing archived month expenses."}
-        </p>
-      </header>
-      <div className="mb-4 max-w-sm">
-        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select timeframe" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="current">Current Month</SelectItem>
-            {archiveSummaries.map((archive) => (
-              <SelectItem key={archive.id} value={archive.id}>
-                {archive.periodLabel}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
-        <CardContent className="p-0 overflow-x-auto">
-          <Table className="min-w-[620px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead>Paid by</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleExpenses.length > 0 ? (
-                visibleExpenses.map((expense) => {
-                  const payer = userMap.get(expense.payerId);
-                  return (
-                    <TableRow key={expense.id}>
-                      <TableCell>
-                        <div className="font-medium">{expense.description}</div>
-                        <div className="text-sm text-muted-foreground sm:hidden flex flex-wrap gap-1 mt-1">
-                          {expense.tags &&
-                            expense.tags.map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage
-                              src={payer?.avatarUrl}
-                              alt={payer?.name}
-                              data-ai-hint="person portrait"
-                            />
-                            <AvatarFallback>
-                              {payer?.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="hidden sm:flex flex-col gap-1.5">
-                            <span>{payer?.name}</span>
-                            <div className="text-sm text-muted-foreground flex flex-wrap gap-1">
+    <div className="flex h-screen flex-col">
+      <PageHeader />
+      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+        <div className="mx-auto w-full max-w-6xl animate-fade-up">
+          <header className="mb-6">
+            <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+              Expense History
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground">
+              {selectedPeriod === "current"
+                ? "Showing current live-month expenses."
+                : "Showing archived month expenses."}
+            </p>
+          </header>
+          <div className="mb-4 max-w-sm">
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select timeframe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Current Month</SelectItem>
+                {archiveSummaries.map((archive) => (
+                  <SelectItem key={archive.id} value={archive.id}>
+                    {archive.periodLabel}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[620px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Paid by</TableHead>
+                    <TableHead className="hidden md:table-cell">Date</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleExpenses.length > 0 ? (
+                    visibleExpenses.map((expense) => {
+                      const payer = userMap.get(expense.payerId);
+                      return (
+                        <TableRow key={expense.id}>
+                          <TableCell>
+                            <div className="font-medium">
+                              {expense.description}
+                            </div>
+                            <div className="text-sm text-muted-foreground sm:hidden flex flex-wrap gap-1 mt-1">
                               {expense.tags &&
                                 expense.tags.map((tag) => (
                                   <Badge
@@ -231,41 +210,70 @@ export default function ExpenseHistoryPage() {
                                   </Badge>
                                 ))}
                             </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {format(new Date(expense.date), "dd/MM/yyyy")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(expense.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage
+                                  src={payer?.avatarUrl}
+                                  alt={payer?.name}
+                                  data-ai-hint="person portrait"
+                                />
+                                <AvatarFallback>
+                                  {payer?.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="hidden sm:flex flex-col gap-1.5">
+                                <span>{payer?.name}</span>
+                                <div className="text-sm text-muted-foreground flex flex-wrap gap-1">
+                                  {expense.tags &&
+                                    expense.tags.map((tag) => (
+                                      <Badge
+                                        key={tag}
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {format(new Date(expense.date), "dd/MM/yyyy")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(expense.amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-muted-foreground py-8"
+                      >
+                        {isAdmin
+                          ? "No expenses found."
+                          : "No personal expenses found."}
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    {isAdmin
-                      ? "No expenses found."
-                      : "No personal expenses found."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-        {isAdmin && selectedPeriod === "current" && hasMore && (
-          <CardFooter className="pt-6 justify-center">
-            <Button onClick={handleLoadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? "Loading..." : "Load More"}
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+            {isAdmin && selectedPeriod === "current" && hasMore && (
+              <CardFooter className="pt-6 justify-center">
+                <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                  {isLoadingMore ? "Loading..." : "Load More"}
+                </Button>
+              </CardFooter>
+            )}
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }

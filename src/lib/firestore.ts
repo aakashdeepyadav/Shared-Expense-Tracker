@@ -188,6 +188,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   const adminMember = normalizedMembers[payload.adminIndex];
   batch.set(adminConfigRef, {
     password: payload.adminPassword,
+    pin: adminMember.pin,
     name: adminMember.name,
     avatarUrl: adminMember.avatarUrl,
     phoneNumber: adminMember.phoneNumber || null,
@@ -274,14 +275,43 @@ export async function createMemberFromSignup(input: MemberSignupInput): Promise<
 
 // --- User Functions ---
 
+async function getAdminAsUser(): Promise<User | null> {
+  const adminConfigRef = doc(db, 'config', 'admin');
+  const adminSnapshot = await getDoc(adminConfigRef);
+  if (!adminSnapshot.exists()) {
+    return null;
+  }
+  const data = adminSnapshot.data();
+  return {
+    id: 'admin',
+    name: (data.name as string) || 'Admin',
+    avatarUrl: (data.avatarUrl as string) || DEFAULT_AVATAR,
+    pin: (data.pin as string) || '',
+    phoneNumber: (data.phoneNumber as string) || undefined,
+    memberType: (data.memberType as string) || 'member',
+  };
+}
+
 export function subscribeToUsers(callback: (users: User[]) => void): () => void {
   const usersCol = collection(db, 'users');
   const q = query(usersCol, orderBy('name', 'asc'));
-  const unsubscribe = onSnapshot(q, (snapshot) => {
+  const unsubscribe = onSnapshot(q, async (snapshot) => {
     const userList = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() } as User))
-      .filter(user => user.id !== 'admin'); // Don't include admin as a regular user
-    callback(userList);
+      .map(doc => ({ id: doc.id, ...doc.data() } as User));
+
+    const hasAdminInUsers = userList.some((user) => user.id === 'admin');
+    if (!hasAdminInUsers) {
+      try {
+        const adminUser = await getAdminAsUser();
+        if (adminUser) {
+          userList.push(adminUser);
+        }
+      } catch {
+        // Keep member list functional even if admin profile lookup fails.
+      }
+    }
+
+    callback(userList.sort((a, b) => a.name.localeCompare(b.name)));
   }, () => {
     const permissionError = new FirestorePermissionError({
       path: usersCol.path,
@@ -299,7 +329,16 @@ export async function getAllUsers(): Promise<User[]> {
   try {
     const userSnapshot = await getDocs(usersCol);
     const userList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-    return userList.filter(user => user.id !== 'admin');
+
+    const hasAdminInUsers = userList.some((user) => user.id === 'admin');
+    if (!hasAdminInUsers) {
+      const adminUser = await getAdminAsUser();
+      if (adminUser) {
+        userList.push(adminUser);
+      }
+    }
+
+    return userList.sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     const permissionError = new FirestorePermissionError({
         path: usersCol.path,
@@ -322,13 +361,12 @@ export async function getUser(id: string): Promise<User | null> {
                 id: 'admin',
                 name: data.name || 'Admin',
                 avatarUrl: data.avatarUrl || DEFAULT_AVATAR,
-                pin: data.password || '',
+                pin: data.pin || '',
                 phoneNumber: data.phoneNumber || undefined,
-                memberType: data.memberType || 'admin',
+                memberType: data.memberType || 'member',
               };
             }
-            const password = await getAdminPassword();
-            return { id: 'admin', name: 'Admin', avatarUrl: DEFAULT_AVATAR, pin: password || '' };
+            return { id: 'admin', name: 'Admin', avatarUrl: DEFAULT_AVATAR, pin: '' };
         }
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
@@ -377,6 +415,23 @@ export async function updateUserCredential(userId: string, newCredential: string
 
 export async function updateUserPhoneNumber(userId: string, phoneNumber: string): Promise<void> {
     if (!userId) throw new Error("User ID is required.");
+
+    if (userId === 'admin') {
+      const adminConfigRef = doc(db, 'config', 'admin');
+      try {
+        await updateDoc(adminConfigRef, { phoneNumber });
+        return;
+      } catch (error) {
+        const permissionError = new FirestorePermissionError({
+          path: adminConfigRef.path,
+          operation: 'update',
+          requestResourceData: { phoneNumber },
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        throw error;
+      }
+    }
+
     const userDocRef = doc(db, 'users', userId);
   try {
     await updateDoc(userDocRef, { phoneNumber: phoneNumber });

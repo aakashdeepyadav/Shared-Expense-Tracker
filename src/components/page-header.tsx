@@ -51,7 +51,7 @@ export function PageHeader({
   const canAddContribution = !!onAddContribution;
 
   return (
-    <header className="sticky top-0 z-10 mx-2 mt-2 flex h-16 shrink-0 items-center gap-3 rounded-2xl border border-white/40 bg-white/70 px-3 shadow-sm backdrop-blur-md animate-fade-up md:mx-4 md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/60">
+    <header className="sticky top-0 z-10 mx-2 mt-2 flex h-16 shrink-0 items-center gap-3 rounded-2xl border border-white/45 bg-white/75 px-3 shadow-md backdrop-blur-md animate-fade-up md:mx-4 md:mt-3 md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/70">
       <div className="md:hidden">
         <SidebarTrigger />
       </div>
@@ -95,7 +95,7 @@ export function PageHeader({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-white/50 bg-white/70 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-white dark:border-white/15 dark:bg-slate-800/60"
+                  className="border-white/50 bg-white/80 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-white dark:border-white/15 dark:bg-slate-800/60 dark:hover:bg-slate-800"
                   onClick={() => setIsExpenseOpen(true)}
                 >
                   <Plus className="sm:mr-2" />

@@ -46,6 +46,7 @@ function AppLayout({
   const router = useRouter();
   const [isMounted, setIsMounted] = React.useState(false);
   const isAuthPage = pathname === "/login" || pathname === "/setup";
+  const isDashboardPage = pathname === "/";
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -135,7 +136,11 @@ function AppLayout({
         <div className="page-shell flex min-h-screen">
           <AppSidebar />
           <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
-            {children}
+            <div
+              className={cn("w-full", !isDashboardPage && "mx-auto max-w-7xl")}
+            >
+              {children}
+            </div>
             <AppSignature />
           </main>
         </div>
