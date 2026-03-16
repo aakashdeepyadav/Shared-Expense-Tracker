@@ -23,7 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertCircle, UserPlus } from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,10 +39,6 @@ export default function LoginPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
-  const [signupName, setSignupName] = useState("");
-  const [signupPin, setSignupPin] = useState("");
-  const [signupPhone, setSignupPhone] = useState("");
-  const [signupType, setSignupType] = useState("student");
   const { toast } = useToast();
   const {
     login,
@@ -56,10 +52,8 @@ export default function LoginPage() {
     verifyPin,
     savePhoneNumberAndSendOtp,
     verifyOtp,
-    registerMember,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
@@ -198,60 +192,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleMemberSignup = async () => {
-    if (!signupName.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Name required",
-        description: "Please enter your name.",
-      });
-      return;
-    }
-    if (!/^\d{6}$/.test(signupPin)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid PIN",
-        description: "PIN must be exactly 6 digits.",
-      });
-      return;
-    }
-    if (signupPhone && !/^[6-9]\d{9}$/.test(signupPhone)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid phone",
-        description: "Phone must be a valid 10-digit Indian number.",
-      });
-      return;
-    }
-
-    setIsRegistering(true);
-    const result = await registerMember({
-      name: signupName,
-      pin: signupPin,
-      phoneNumber: signupPhone ? `+91${signupPhone}` : undefined,
-      memberType: signupType,
-    });
-    setIsRegistering(false);
-
-    if (result.success) {
-      toast({
-        title: "Member registered",
-        description: "Account created. You can sign in now.",
-      });
-      setSignupName("");
-      setSignupPin("");
-      setSignupPhone("");
-      setSignupType("student");
-      setActiveTab("login");
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Signup failed",
-        description: result.message || "Could not create member account.",
-      });
-    }
-  };
-
   const isLocked = lockoutTime > Date.now();
 
   const resetLoginFlow = () => {
@@ -301,21 +241,24 @@ export default function LoginPage() {
       <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden p-4">
         <div className="pointer-events-none absolute -left-16 top-10 h-60 w-60 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/20" />
         <div className="pointer-events-none absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl dark:bg-amber-500/20" />
-        <Card className="modern-surface w-full max-w-lg border-0 shadow-xl">
+        <Card className="modern-surface w-full max-w-md border-0 shadow-xl">
           <CardHeader className="items-center text-center">
             <Logo className="mb-4 h-16 w-16" />
             <CardTitle>Welcome to Shared Expense Tracker</CardTitle>
             <CardDescription>
-              This project is not configured yet. Create your group tracker
-              instance first.
+              Login screen is ready. To use this app for a new group, complete
+              signup setup first.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Button className="w-full" asChild>
-              <Link href="/setup">Start Setup Wizard</Link>
+              <Link href="/setup">
+                Signup
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/">Go Dashboard</Link>
+            <Button variant="outline" className="w-full" disabled>
+              Login will be enabled after setup
             </Button>
           </CardContent>
         </Card>
@@ -334,7 +277,7 @@ export default function LoginPage() {
           <CardTitle className="text-2xl tracking-tight">
             Welcome to {appConfig?.groupName || "Shared Expense Tracker"}
           </CardTitle>
-          <CardDescription>Sign in or create a member account</CardDescription>
+          <CardDescription>Sign in or signup for a new group</CardDescription>
         </CardHeader>
         <CardContent>
           {isLocked && activeTab === "login" && (
@@ -526,68 +469,16 @@ export default function LoginPage() {
             </TabsContent>
 
             <TabsContent value="signup" className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="signup-name">Full name</Label>
-                <Input
-                  id="signup-name"
-                  value={signupName}
-                  onChange={(e) => setSignupName(e.target.value)}
-                  placeholder="Your name"
-                />
+              <div className="rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
+                Use this when you want to create a brand-new group tracker on
+                your Firebase project. The setup wizard will collect group
+                details, members, admin password, and Firebase config.
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="signup-pin">Create PIN (6 digits)</Label>
-                <Input
-                  id="signup-pin"
-                  value={signupPin}
-                  maxLength={6}
-                  onChange={(e) =>
-                    setSignupPin(e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="123456"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="signup-phone">Phone number (optional)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    +91
-                  </span>
-                  <Input
-                    id="signup-phone"
-                    value={signupPhone}
-                    maxLength={10}
-                    className="pl-10"
-                    onChange={(e) =>
-                      setSignupPhone(e.target.value.replace(/\D/g, ""))
-                    }
-                    placeholder="9876543210"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="signup-type">Profile type</Label>
-                <Select value={signupType} onValueChange={setSignupType}>
-                  <SelectTrigger id="signup-type">
-                    <SelectValue placeholder="Select profile type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="family">Family</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={handleMemberSignup}
-                disabled={isRegistering}
-                className="w-full"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                {isRegistering
-                  ? "Creating account..."
-                  : "Create Member Account"}
+              <Button className="w-full" asChild>
+                <Link href="/setup">
+                  Signup
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
               </Button>
             </TabsContent>
           </Tabs>
@@ -598,7 +489,7 @@ export default function LoginPage() {
               href="/setup"
               className="text-primary underline underline-offset-4"
             >
-              Run setup wizard
+              Signup
             </Link>
             .
           </div>

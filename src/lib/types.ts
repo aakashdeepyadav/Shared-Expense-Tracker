@@ -31,6 +31,7 @@ export type TrackerTheme = "system" | "light" | "dark";
 
 export type AppConfig = {
   initialized: boolean;
+  groupId?: string;
   groupName: string;
   groupImageUrl?: string;
   memberTypeLabel?: string;
@@ -39,6 +40,7 @@ export type AppConfig = {
   themePreference: TrackerTheme;
   modelApiKey?: string;
   firebaseProjectConfig?: FirebaseProjectConfigInput;
+  currentPeriodStart?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -99,6 +101,24 @@ export type AuditLogEntry = {
   action: string;
   metadata?: Record<string, unknown> | null;
   timestamp: string;
+};
+
+export type MonthArchiveSummary = {
+  id: string;
+  groupId?: string;
+  periodLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  expenseCount: number;
+  contributionCount: number;
+  messageCount: number;
+  archivedAt: string;
+};
+
+export type MonthArchive = MonthArchiveSummary & {
+  expenses: Expense[];
+  contributions: Contribution[];
+  messages: ChatMessage[];
 };
 
     

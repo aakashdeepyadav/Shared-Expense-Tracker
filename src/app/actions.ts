@@ -12,14 +12,14 @@ import {
 } from "@/ai/flows/generate-report";
 import { z } from "zod";
 import {
-  clearAllData,
+  getAdminPassword,
   getAppConfig,
   updateUserPhoneNumber,
   addExpense,
   addContribution,
   addAdminAuditLog,
+  rolloverMonthWithArchive,
 } from "@/lib/firestore";
-import { archiveDataToSheet } from "@/lib/sheets";
 
 const actionSchema = z.object({
   amount: z.number(),
@@ -228,24 +228,38 @@ export async function updateUserPhoneNumberAction(
   }
 }
 
-export async function startNewMonthAction(token: string | null): Promise<StartNewMonthOutput> {
+export async function startNewMonthAction(
+  token: string | null,
+  adminPassword: string,
+): Promise<StartNewMonthOutput> {
   // 1. Authenticate user as admin
   if (!verifyAdmin(token)) {
     return { success: false, error: "Authorization failed: Not an admin." };
   }
 
-  try {
-    // 2. Archive data to Google Sheets
-    await archiveDataToSheet();
-    
-    // 3. Clear all data from Firestore
-    await clearAllData();
+  if (!adminPassword.trim()) {
+    return { success: false, error: "Admin password is required." };
+  }
 
-    await logAdminAction("month.rollover.start");
+  try {
+    const currentAdminPassword = await getAdminPassword();
+    if (!currentAdminPassword || currentAdminPassword !== adminPassword) {
+      return { success: false, error: "Invalid admin password." };
+    }
+
+    const rollover = await rolloverMonthWithArchive();
+
+    await logAdminAction("month.rollover.start", {
+      archiveId: rollover.id,
+      periodLabel: rollover.periodLabel,
+      expenseCount: rollover.expenseCount,
+      contributionCount: rollover.contributionCount,
+      messageCount: rollover.messageCount,
+    });
 
     return {
       success: true,
-      message: "Data has been successfully archived to Google Sheets and the new month has started.",
+      message: `New month started. Archived ${rollover.periodLabel} data for history.`,
     };
 
   } catch (error: unknown) {

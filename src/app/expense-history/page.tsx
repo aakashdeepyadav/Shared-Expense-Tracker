@@ -14,12 +14,24 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
-import { subscribeToExpenses, subscribeToUsers } from "@/lib/firestore";
-import type { Expense, User } from "@/lib/types";
+import {
+  getMonthArchiveById,
+  getMonthArchives,
+  subscribeToExpenses,
+  subscribeToUsers,
+} from "@/lib/firestore";
+import type { Expense, MonthArchiveSummary, User } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { HistoryShimmer } from "@/components/shimmers/history-shimmer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const PAGE_SIZE = 20;
 
@@ -34,6 +46,10 @@ export default function ExpenseHistoryPage() {
   const [lastExpense, setLastExpense] = useState<Expense | undefined>(
     undefined,
   );
+  const [archiveSummaries, setArchiveSummaries] = useState<
+    MonthArchiveSummary[]
+  >([]);
+  const [selectedPeriod, setSelectedPeriod] = useState("current");
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -43,14 +59,32 @@ export default function ExpenseHistoryPage() {
       router.push("/login");
     } else {
       setIsLoading(true);
-      const unsubExpenses = subscribeToExpenses(PAGE_SIZE, (newExpenses) => {
-        setExpenses(newExpenses);
-        setHasMore(newExpenses.length === PAGE_SIZE);
-        if (newExpenses.length > 0) {
-          setLastExpense(newExpenses[newExpenses.length - 1]);
-        }
-        setIsLoading(false);
-      });
+      const unsubExpenses =
+        selectedPeriod === "current"
+          ? subscribeToExpenses(PAGE_SIZE, (newExpenses) => {
+              setExpenses(newExpenses);
+              setHasMore(newExpenses.length === PAGE_SIZE);
+              if (newExpenses.length > 0) {
+                setLastExpense(newExpenses[newExpenses.length - 1]);
+              }
+              setIsLoading(false);
+            })
+          : () => {};
+
+      if (selectedPeriod !== "current") {
+        void (async () => {
+          const archive = await getMonthArchiveById(selectedPeriod);
+          setExpenses(archive?.expenses || []);
+          setHasMore(false);
+          setLastExpense(undefined);
+          setIsLoading(false);
+        })();
+      }
+
+      void (async () => {
+        const summaries = await getMonthArchives();
+        setArchiveSummaries(summaries);
+      })();
 
       const unsubUsers = subscribeToUsers((newUsers) => {
         setUsers(newUsers);
@@ -61,9 +95,10 @@ export default function ExpenseHistoryPage() {
         unsubUsers();
       };
     }
-  }, [currentUser, isAppConfigured, isAuthLoading, router]);
+  }, [currentUser, isAppConfigured, isAuthLoading, router, selectedPeriod]);
 
   const handleLoadMore = () => {
+    if (selectedPeriod !== "current") return;
     if (!hasMore || isLoadingMore || !lastExpense) return;
     setIsLoadingMore(true);
 
@@ -118,9 +153,26 @@ export default function ExpenseHistoryPage() {
           Expense History
         </h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Showing all recorded expenses.
+          {selectedPeriod === "current"
+            ? "Showing current live-month expenses."
+            : "Showing archived month expenses."}
         </p>
       </header>
+      <div className="mb-4 max-w-sm">
+        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select timeframe" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="current">Current Month</SelectItem>
+            {archiveSummaries.map((archive) => (
+              <SelectItem key={archive.id} value={archive.id}>
+                {archive.periodLabel}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
         <CardContent className="p-0 overflow-x-auto">
           <Table className="min-w-[620px]">
@@ -206,7 +258,7 @@ export default function ExpenseHistoryPage() {
             </TableBody>
           </Table>
         </CardContent>
-        {isAdmin && hasMore && (
+        {isAdmin && selectedPeriod === "current" && hasMore && (
           <CardFooter className="pt-6 justify-center">
             <Button onClick={handleLoadMore} disabled={isLoadingMore}>
               {isLoadingMore ? "Loading..." : "Load More"}

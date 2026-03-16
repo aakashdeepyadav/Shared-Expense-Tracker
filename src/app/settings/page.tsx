@@ -60,6 +60,7 @@ export default function SettingsPage() {
   const [confirmCredential, setConfirmCredential] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isStartingNewMonth, setIsStartingNewMonth] = useState(false);
+  const [monthResetPassword, setMonthResetPassword] = useState("");
 
   // State for admin phone number change
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -197,15 +198,25 @@ export default function SettingsPage() {
   };
 
   const handleStartNewMonth = async () => {
+    if (!monthResetPassword.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Password required",
+        description: "Please enter admin password to confirm month reset.",
+      });
+      return;
+    }
+
     setIsStartingNewMonth(true);
     try {
       const token = await getToken();
-      const result = await startNewMonthAction(token);
+      const result = await startNewMonthAction(token, monthResetPassword);
       if (result.success) {
         toast({
           title: "New Month Started!",
           description: result.message,
         });
+        setMonthResetPassword("");
       } else {
         throw new Error(result.error || "An unknown error occurred.");
       }
@@ -373,10 +384,9 @@ export default function SettingsPage() {
                 <CardTitle>Admin Zone - Danger</CardTitle>
               </div>
               <CardDescription>
-                This action will archive all current expenses, contributions,
-                and chat history to Google Sheets, and then permanently delete
-                them from the database to start a new month. This cannot be
-                undone.
+                This action archives the current month into Firestore history,
+                then starts a fresh live month. Existing history stays
+                accessible in history pages.
               </CardDescription>
             </CardHeader>
             <CardFooter>
@@ -403,14 +413,32 @@ export default function SettingsPage() {
                       Are you absolutely sure?
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently delete all current expense,
-                      contribution, and chat data after archiving it to Google
-                      Sheets. This action cannot be undone.
+                      This will archive current expenses, contributions, and
+                      chat data into a monthly history record, then clear the
+                      live month. Enter admin password to continue.
                     </AlertDialogDescription>
+                    <div className="space-y-2">
+                      <Label htmlFor="month-reset-password">
+                        Confirm admin password
+                      </Label>
+                      <Input
+                        id="month-reset-password"
+                        type="password"
+                        value={monthResetPassword}
+                        onChange={(e) => setMonthResetPassword(e.target.value)}
+                        placeholder="Enter admin password"
+                        disabled={isStartingNewMonth}
+                      />
+                    </div>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleStartNewMonth}>
+                    <AlertDialogAction
+                      onClick={handleStartNewMonth}
+                      disabled={
+                        isStartingNewMonth || !monthResetPassword.trim()
+                      }
+                    >
                       Yes, start new month
                     </AlertDialogAction>
                   </AlertDialogFooter>

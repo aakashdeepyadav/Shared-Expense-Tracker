@@ -26,6 +26,8 @@ import type {
   AppConfig,
   TrackerSetupPayload,
   MemberSignupInput,
+  MonthArchive,
+  MonthArchiveSummary,
 } from './types';
 import { users as mockUsers, adminPassword as mockAdminPassword } from './data';
 import { FirestorePermissionError } from './errors';
@@ -52,6 +54,16 @@ function normalizeIndianPhoneNumber(phoneNumber?: string): string | undefined {
     return phoneNumber;
   }
   return undefined;
+}
+
+function generateGroupId(groupName: string): string {
+  const slug = groupName
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${slug || 'group'}-${suffix}`;
 }
 
 export async function addAdminAuditLog(entry: {
@@ -182,8 +194,10 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   });
 
   const nowIso = new Date().toISOString();
+  const groupId = generateGroupId(payload.groupName);
   batch.set(appConfigRef, {
     initialized: true,
+    groupId,
     groupName: payload.groupName.trim(),
     groupImageUrl: payload.groupImageUrl || null,
     memberTypeLabel: payload.memberTypeLabel || 'member',
@@ -192,6 +206,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     themePreference: payload.themePreference,
     modelApiKey: payload.modelApiKey || null,
     firebaseProjectConfig: payload.firebaseProjectConfig || null,
+    currentPeriodStart: nowIso,
     createdAt: nowIso,
     updatedAt: nowIso,
   });
@@ -701,6 +716,151 @@ export async function clearAllData(): Promise<void> {
       });
       errorEmitter.emit('permission-error', permissionError);
       throw error;
+  }
+}
+
+export async function getMonthArchives(): Promise<MonthArchiveSummary[]> {
+  const archivesCol = collection(db, 'monthArchives');
+  const q = query(archivesCol, orderBy('periodEnd', 'desc'));
+  try {
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((entry) => {
+      const data = entry.data();
+      const archivedAtRaw = data.archivedAt as Timestamp | string | undefined;
+      return {
+        id: entry.id,
+        groupId: data.groupId as string | undefined,
+        periodLabel: (data.periodLabel as string) || 'Archived Period',
+        periodStart: (data.periodStart as string) || '',
+        periodEnd: (data.periodEnd as string) || '',
+        expenseCount: Number(data.expenseCount || 0),
+        contributionCount: Number(data.contributionCount || 0),
+        messageCount: Number(data.messageCount || 0),
+        archivedAt:
+          typeof archivedAtRaw === 'string'
+            ? archivedAtRaw
+            : archivedAtRaw?.toDate().toISOString() || '',
+      } as MonthArchiveSummary;
+    });
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: archivesCol.path,
+      operation: 'list',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function getMonthArchiveById(
+  archiveId: string,
+): Promise<MonthArchive | null> {
+  const archiveRef = doc(db, 'monthArchives', archiveId);
+  try {
+    const snapshot = await getDoc(archiveRef);
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    const data = snapshot.data();
+    const archivedAtRaw = data.archivedAt as Timestamp | string | undefined;
+    return {
+      id: snapshot.id,
+      groupId: data.groupId as string | undefined,
+      periodLabel: (data.periodLabel as string) || 'Archived Period',
+      periodStart: (data.periodStart as string) || '',
+      periodEnd: (data.periodEnd as string) || '',
+      expenseCount: Number(data.expenseCount || 0),
+      contributionCount: Number(data.contributionCount || 0),
+      messageCount: Number(data.messageCount || 0),
+      archivedAt:
+        typeof archivedAtRaw === 'string'
+          ? archivedAtRaw
+          : archivedAtRaw?.toDate().toISOString() || '',
+      expenses: (data.expenses as Expense[]) || [],
+      contributions: (data.contributions as Contribution[]) || [],
+      messages: (data.messages as ChatMessage[]) || [],
+    };
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: archiveRef.path,
+      operation: 'get',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
+  const [appConfig, expenses, contributions, messages] = await Promise.all([
+    getAppConfig(),
+    getAllExpensesForReport(),
+    getAllContributionsForReport(),
+    getAllChatMessages(),
+  ]);
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const periodStart = appConfig?.currentPeriodStart || appConfig?.createdAt || nowIso;
+  const periodStartDate = new Date(periodStart);
+  const periodLabel = Number.isNaN(periodStartDate.getTime())
+    ? `Period ending ${now.toLocaleDateString()}`
+    : `${periodStartDate.toLocaleString('en-US', { month: 'short' })} ${periodStartDate.getFullYear()}`;
+
+  const archiveRef = doc(collection(db, 'monthArchives'));
+  const archivesData = {
+    groupId: appConfig?.groupId || null,
+    periodLabel,
+    periodStart,
+    periodEnd: nowIso,
+    expenseCount: expenses.length,
+    contributionCount: contributions.length,
+    messageCount: messages.length,
+    archivedAt: Timestamp.now(),
+    expenses,
+    contributions,
+    messages,
+  };
+
+  const appConfigRef = doc(db, 'config', 'app');
+  const collectionsToClear = ['expenses', 'contributions', 'messages'];
+  const batch = writeBatch(db);
+  batch.set(archiveRef, archivesData);
+
+  if (appConfig?.initialized) {
+    batch.update(appConfigRef, {
+      currentPeriodStart: nowIso,
+      updatedAt: nowIso,
+    });
+  }
+
+  for (const collectionName of collectionsToClear) {
+    const snapshot = await getDocs(collection(db, collectionName));
+    snapshot.docs.forEach((entry) => {
+      batch.delete(entry.ref);
+    });
+  }
+
+  try {
+    await batch.commit();
+    return {
+      id: archiveRef.id,
+      groupId: appConfig?.groupId,
+      periodLabel,
+      periodStart,
+      periodEnd: nowIso,
+      expenseCount: expenses.length,
+      contributionCount: contributions.length,
+      messageCount: messages.length,
+      archivedAt: nowIso,
+    };
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: 'monthArchives + config/app + live collections',
+      operation: 'create',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
   }
 }
 

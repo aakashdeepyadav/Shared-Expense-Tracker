@@ -63,7 +63,7 @@ function AppLayout({
     }
 
     if (!isAppConfigured && !isAuthPage) {
-      router.replace("/setup");
+      router.replace("/login");
       return;
     }
 

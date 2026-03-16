@@ -13,12 +13,24 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
-import { subscribeToContributions, subscribeToUsers } from "@/lib/firestore";
-import type { Contribution, User } from "@/lib/types";
+import {
+  getMonthArchiveById,
+  getMonthArchives,
+  subscribeToContributions,
+  subscribeToUsers,
+} from "@/lib/firestore";
+import type { Contribution, MonthArchiveSummary, User } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { HistoryShimmer } from "@/components/shimmers/history-shimmer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const PAGE_SIZE = 20;
 
@@ -33,6 +45,10 @@ export default function ContributionHistoryPage() {
   const [lastContribution, setLastContribution] = useState<
     Contribution | undefined
   >(undefined);
+  const [archiveSummaries, setArchiveSummaries] = useState<
+    MonthArchiveSummary[]
+  >([]);
+  const [selectedPeriod, setSelectedPeriod] = useState("current");
 
   useEffect(() => {
     if (!isAuthLoading && !isAppConfigured) {
@@ -41,17 +57,34 @@ export default function ContributionHistoryPage() {
       router.push("/login");
     } else if (currentUser) {
       setIsLoading(true);
-      const unsubContributions = subscribeToContributions(
-        PAGE_SIZE,
-        (newContributions) => {
-          setContributions(newContributions);
-          setHasMore(newContributions.length === PAGE_SIZE);
-          if (newContributions.length > 0) {
-            setLastContribution(newContributions[newContributions.length - 1]);
-          }
+      const unsubContributions =
+        selectedPeriod === "current"
+          ? subscribeToContributions(PAGE_SIZE, (newContributions) => {
+              setContributions(newContributions);
+              setHasMore(newContributions.length === PAGE_SIZE);
+              if (newContributions.length > 0) {
+                setLastContribution(
+                  newContributions[newContributions.length - 1],
+                );
+              }
+              setIsLoading(false);
+            })
+          : () => {};
+
+      if (selectedPeriod !== "current") {
+        void (async () => {
+          const archive = await getMonthArchiveById(selectedPeriod);
+          setContributions(archive?.contributions || []);
+          setHasMore(false);
+          setLastContribution(undefined);
           setIsLoading(false);
-        },
-      );
+        })();
+      }
+
+      void (async () => {
+        const summaries = await getMonthArchives();
+        setArchiveSummaries(summaries);
+      })();
 
       const unsubUsers = subscribeToUsers((newUsers) => {
         setUsers(newUsers);
@@ -62,9 +95,10 @@ export default function ContributionHistoryPage() {
         unsubUsers();
       };
     }
-  }, [currentUser, isAppConfigured, isAuthLoading, router]);
+  }, [currentUser, isAppConfigured, isAuthLoading, router, selectedPeriod]);
 
   const handleLoadMore = () => {
+    if (selectedPeriod !== "current") return;
     if (!hasMore || isLoadingMore || !lastContribution) return;
     setIsLoadingMore(true);
 
@@ -110,9 +144,26 @@ export default function ContributionHistoryPage() {
           Contribution History
         </h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Showing all recorded contributions.
+          {selectedPeriod === "current"
+            ? "Showing current live-month contributions."
+            : "Showing archived month contributions."}
         </p>
       </header>
+      <div className="mb-4 max-w-sm">
+        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select timeframe" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="current">Current Month</SelectItem>
+            {archiveSummaries.map((archive) => (
+              <SelectItem key={archive.id} value={archive.id}>
+                {archive.periodLabel}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
         <CardContent className="p-0 overflow-x-auto">
           <Table className="min-w-[560px]">
@@ -170,7 +221,7 @@ export default function ContributionHistoryPage() {
             </TableBody>
           </Table>
         </CardContent>
-        {isAdmin && hasMore && (
+        {isAdmin && selectedPeriod === "current" && hasMore && (
           <CardFooter className="pt-6 justify-center">
             <Button onClick={handleLoadMore} disabled={isLoadingMore}>
               {isLoadingMore ? "Loading..." : "Load More"}

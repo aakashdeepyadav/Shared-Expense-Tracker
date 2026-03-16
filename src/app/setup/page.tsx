@@ -28,7 +28,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { initializeTrackerInstance } from "@/lib/firestore";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Info } from "lucide-react";
 import type {
   FirebaseProjectConfigInput,
   SetupMemberInput,
@@ -79,6 +79,28 @@ function validateImageFile(file: File): string | null {
   if (file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
     return "Image size must be 2MB or smaller.";
   }
+  return null;
+}
+
+function validateFirebaseProjectConfig(
+  config: FirebaseProjectConfigInput | null,
+): string | null {
+  if (!config) {
+    return null;
+  }
+
+  const requiredKeys: Array<keyof FirebaseProjectConfigInput> = [
+    "apiKey",
+    "authDomain",
+    "projectId",
+    "appId",
+  ];
+
+  const missing = requiredKeys.filter((key) => !config[key]?.trim());
+  if (missing.length > 0) {
+    return `Missing required Firebase keys: ${missing.join(", ")}.`;
+  }
+
   return null;
 }
 
@@ -134,8 +156,19 @@ export default function SetupPage() {
         adminPassword.trim().length >= 8
       );
     }
+    if (currentStep === "integrations") {
+      return !validateFirebaseProjectConfig(firebaseProjectConfig);
+    }
     return true;
-  }, [currentStep, groupName, memberCount, members, adminIndex, adminPassword]);
+  }, [
+    currentStep,
+    groupName,
+    memberCount,
+    members,
+    adminIndex,
+    adminPassword,
+    firebaseProjectConfig,
+  ]);
 
   const getStepCompletion = (step: SetupStep): number => {
     if (step === "group") {
@@ -198,7 +231,7 @@ export default function SetupPage() {
       case "admin":
         return "Pick one member as admin and create admin password for full access.";
       case "integrations":
-        return "Attach Firebase project config, model API key and preferred theme.";
+        return "Set theme and optional integrations. You can skip Firebase JSON for a free setup.";
       case "review":
         return "Confirm everything before creating your expense tracker instance.";
       default:
@@ -333,6 +366,18 @@ export default function SetupPage() {
       return;
     }
 
+    const firebaseValidationError = validateFirebaseProjectConfig(
+      firebaseProjectConfig,
+    );
+    if (firebaseValidationError) {
+      toast({
+        variant: "destructive",
+        title: "Firebase config format issue",
+        description:
+          "You can skip Firebase JSON and continue, or fix the JSON keys to save it now.",
+      });
+    }
+
     const payload: TrackerSetupPayload = {
       groupName,
       groupImageUrl: groupImageUrl || undefined,
@@ -342,7 +387,9 @@ export default function SetupPage() {
       adminPassword,
       themePreference,
       modelApiKey: modelApiKey || undefined,
-      firebaseProjectConfig: firebaseProjectConfig || undefined,
+      firebaseProjectConfig: firebaseValidationError
+        ? undefined
+        : firebaseProjectConfig || undefined,
     };
 
     setIsSubmitting(true);
@@ -640,6 +687,37 @@ export default function SetupPage() {
 
               {currentStep === "integrations" && (
                 <div className="space-y-6">
+                  <Card className="border border-primary/20 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Info className="h-4 w-4" />
+                        Setup Guide: Firebase Keys
+                      </CardTitle>
+                      <CardDescription>
+                        Create a web app in your Firebase project and copy the
+                        Firebase SDK config object values here. This step is
+                        optional for free setup.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm text-muted-foreground">
+                      <p>1. Open Firebase Console, create/select project.</p>
+                      <p>
+                        2. Enable Authentication and Firestore for the same
+                        project.
+                      </p>
+                      <p>3. Add a Web App and copy SDK config values.</p>
+                      <p>
+                        4. If you provide config, include:{" "}
+                        <strong>apiKey</strong>, <strong>authDomain</strong>,{" "}
+                        <strong>projectId</strong>, <strong>appId</strong>.
+                      </p>
+                      <p>
+                        5. Free mode works on Firebase Spark plan. You can add
+                        config later in project settings if needed.
+                      </p>
+                    </CardContent>
+                  </Card>
+
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Theme preference</Label>
@@ -677,7 +755,7 @@ export default function SetupPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="firebase-json-file">
-                      Upload Firebase JSON
+                      Upload Firebase JSON (optional)
                     </Label>
                     <Input
                       id="firebase-json-file"
@@ -691,7 +769,7 @@ export default function SetupPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="firebase-json-text">
-                      Or paste Firebase config JSON
+                      Or paste Firebase config JSON (optional)
                     </Label>
                     <Textarea
                       id="firebase-json-text"
@@ -710,10 +788,30 @@ export default function SetupPage() {
                     >
                       Validate JSON
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setFirebaseJsonInput("");
+                        setFirebaseProjectConfig(null);
+                        toast({
+                          title: "Using free setup",
+                          description:
+                            "Firebase JSON skipped. You can complete setup now.",
+                        });
+                      }}
+                    >
+                      Skip for now
+                    </Button>
                     {firebaseProjectConfig && (
                       <Badge>Firebase config ready</Badge>
                     )}
                   </div>
+                  {validateFirebaseProjectConfig(firebaseProjectConfig) && (
+                    <p className="text-sm text-destructive">
+                      {validateFirebaseProjectConfig(firebaseProjectConfig)}
+                    </p>
+                  )}
                 </div>
               )}
 
