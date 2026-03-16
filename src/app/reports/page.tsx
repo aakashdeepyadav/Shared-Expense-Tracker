@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { generateReportAction } from "@/app/actions";
-import type { GenerateReportOutput } from "@/ai/flows/generate-report";
 import {
   Loader2,
   FileDown,
@@ -42,6 +40,13 @@ import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import { DashboardShimmer } from "@/components/shimmers/dashboard-shimmer";
+import {
+  addAdminAuditLog,
+  getAllContributionsForReport,
+  getAllExpensesForReport,
+  getAllUsers,
+} from "@/lib/firestore";
+import type { Contribution, Expense, User } from "@/lib/types";
 
 const chartColors = [
   "hsl(var(--chart-1))",
@@ -51,9 +56,160 @@ const chartColors = [
   "hsl(var(--chart-5))",
 ];
 
+type GenerateReportOutput = {
+  report: string;
+  expenseBreakdown: { category: string; total: number }[];
+  memberContributions: { name: string; total: number }[];
+  aiSummary: string;
+  totalContributions: number;
+  totalExpenses: number;
+  walletBalance: number;
+  expensePerMember: number;
+};
+
+function buildClientReport(
+  users: User[],
+  expenses: Expense[],
+  contributions: Contribution[],
+): GenerateReportOutput {
+  const totalContributions = contributions.reduce(
+    (acc, c) => acc + c.amount,
+    0,
+  );
+  const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const walletBalance = totalContributions - totalExpenses;
+  const expensePerMember = users.length > 0 ? totalExpenses / users.length : 0;
+
+  const breakdownMap = new Map<string, number>();
+  expenses.forEach((expense) => {
+    expense.tags.forEach((tag) => {
+      breakdownMap.set(tag, (breakdownMap.get(tag) || 0) + expense.amount);
+    });
+  });
+  const expenseBreakdown = Array.from(breakdownMap, ([category, total]) => ({
+    category,
+    total,
+  }));
+
+  const memberBalances = new Map<
+    string,
+    { paid: number; share: number; contributed: number }
+  >();
+  users.forEach((user) =>
+    memberBalances.set(user.id, { paid: 0, share: 0, contributed: 0 }),
+  );
+
+  contributions.forEach((contribution) => {
+    const entry = memberBalances.get(contribution.contributorId);
+    if (entry) {
+      entry.contributed += contribution.amount;
+    }
+  });
+
+  expenses.forEach((expense) => {
+    if (expense.payerId !== "tifresh") {
+      const payer = memberBalances.get(expense.payerId);
+      if (payer) {
+        payer.paid += expense.amount;
+      }
+    }
+    expense.participants.forEach((participant) => {
+      const entry = memberBalances.get(participant.userId);
+      if (entry) {
+        entry.share += participant.share;
+      }
+    });
+  });
+
+  const memberContributions = users
+    .map((user) => {
+      const balance = memberBalances.get(user.id) || {
+        paid: 0,
+        share: 0,
+        contributed: 0,
+      };
+      return {
+        name: user.name,
+        total: balance.paid + balance.contributed,
+      };
+    })
+    .filter((entry) => entry.total > 0);
+
+  const netBalances = new Map<string, number>();
+  let report = `
+## Member Summary
+| Member | Expenses Paid | Wallet Contributions | Share of Expenses | Net Balance |
+| :--- | :---: | :---: | :---: | :---: |
+`;
+
+  users.forEach((user) => {
+    const balance = memberBalances.get(user.id) || {
+      paid: 0,
+      share: 0,
+      contributed: 0,
+    };
+    const netBalance = balance.paid + balance.contributed - balance.share;
+    netBalances.set(user.id, netBalance);
+
+    report += `| ${user.name} | ${formatCurrency(balance.paid)} | ${formatCurrency(
+      balance.contributed,
+    )} | ${formatCurrency(balance.share)} | ${formatCurrency(netBalance)} |\n`;
+  });
+
+  report += "\n## Settlement\n";
+
+  const payers = Array.from(netBalances.entries())
+    .filter(([, balance]) => balance > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const owers = Array.from(netBalances.entries())
+    .filter(([, balance]) => balance < 0)
+    .sort((a, b) => a[1] - b[1]);
+
+  let settlementSteps = "";
+  let i = 0;
+  let j = 0;
+
+  while (i < payers.length && j < owers.length) {
+    const [payerId, payerAmount] = payers[i];
+    const [owerId, owerAmount] = owers[j];
+    const amountToSettle = Math.min(payerAmount, Math.abs(owerAmount));
+
+    const payerName = users.find((u) => u.id === payerId)?.name || payerId;
+    const owerName = users.find((u) => u.id === owerId)?.name || owerId;
+    settlementSteps += `*   **${owerName}** owes **${payerName}** ${formatCurrency(amountToSettle)}.\n`;
+
+    payers[i][1] -= amountToSettle;
+    owers[j][1] += amountToSettle;
+
+    if (Math.abs(payers[i][1]) < 0.01) i += 1;
+    if (Math.abs(owers[j][1]) < 0.01) j += 1;
+  }
+
+  if (settlementSteps) {
+    report += settlementSteps;
+  } else {
+    report += "All accounts are settled. No payments are needed!";
+  }
+
+  const aiSummary =
+    walletBalance >= 0
+      ? "Overall, spending is controlled and the wallet remains healthy for the period."
+      : "Overall, group spending exceeded contributions this period, so adding wallet contributions is recommended.";
+
+  return {
+    report,
+    expenseBreakdown,
+    memberContributions,
+    aiSummary,
+    totalContributions,
+    totalExpenses,
+    walletBalance,
+    expensePerMember,
+  };
+}
+
 export default function ReportsPage() {
-  const { currentUser, isAdmin, isAuthLoading, isAppConfigured, getToken } =
-    useAuth();
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [reportData, setReportData] = useState<GenerateReportOutput | null>(
@@ -79,17 +235,26 @@ export default function ReportsPage() {
     setIsLoading(true);
     setReportData(null);
     try {
-      const token = await getToken();
-      const result = await generateReportAction(token);
-      if (result) {
-        setReportData(result);
-        toast({
-          title: "Report Generated",
-          description: "Your financial report has been successfully created.",
-        });
-      } else {
-        throw new Error("Report generation failed to return content.");
-      }
+      const [users, expenses, contributions] = await Promise.all([
+        getAllUsers(),
+        getAllExpensesForReport(),
+        getAllContributionsForReport(),
+      ]);
+
+      const result = buildClientReport(users, expenses, contributions);
+      setReportData(result);
+      await addAdminAuditLog({
+        action: "report.generate",
+        metadata: {
+          userCount: users.length,
+          expenseCount: expenses.length,
+          contributionCount: contributions.length,
+        },
+      });
+      toast({
+        title: "Report Generated",
+        description: "Your financial report has been successfully created.",
+      });
     } catch (error) {
       console.error("Report generation error:", error);
       toast({

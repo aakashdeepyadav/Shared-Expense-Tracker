@@ -28,6 +28,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { initializeTrackerInstance } from "@/lib/firestore";
+import { setRuntimeFirebaseConfig } from "@/lib/firebase";
 import { CheckCircle2, Info } from "lucide-react";
 import type {
   FirebaseProjectConfigInput,
@@ -391,6 +392,18 @@ export default function SetupPage() {
         ? undefined
         : firebaseProjectConfig || undefined,
     };
+
+    if (payload.firebaseProjectConfig) {
+      const switched = setRuntimeFirebaseConfig(payload.firebaseProjectConfig);
+      if (!switched) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Firebase config",
+          description: "Could not connect to the provided Firebase project.",
+        });
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     try {

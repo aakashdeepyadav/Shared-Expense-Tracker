@@ -17,9 +17,11 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ShieldAlert } from "lucide-react";
 import {
-  startNewMonthAction,
-  updateUserPhoneNumberAction,
-} from "@/app/actions";
+  addAdminAuditLog,
+  getAdminPassword,
+  rolloverMonthWithArchive,
+  updateUserPhoneNumber,
+} from "@/lib/firestore";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +53,6 @@ export default function SettingsPage() {
     isAppConfigured,
     users,
     isDataLoading,
-    getToken,
   } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -170,15 +171,14 @@ export default function SettingsPage() {
     }
 
     setIsUpdatingPhone(true);
-    const token = await getToken();
     const fullPhoneNumber = `+91${newPhoneNumber}`;
-    const result = await updateUserPhoneNumberAction(
-      selectedUserId,
-      fullPhoneNumber,
-      token,
-    );
 
-    if (result.success) {
+    try {
+      await updateUserPhoneNumber(selectedUserId, fullPhoneNumber);
+      await addAdminAuditLog({
+        action: "member.phone.update",
+        metadata: { userId: selectedUserId, phoneNumber: fullPhoneNumber },
+      });
       const userName =
         users.find((u) => u.id === selectedUserId)?.name || "User";
       toast({
@@ -187,11 +187,11 @@ export default function SettingsPage() {
       });
       setSelectedUserId("");
       setNewPhoneNumber("");
-    } else {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: result.error || "An unexpected error occurred.",
+        description: getErrorMessage(error),
       });
     }
     setIsUpdatingPhone(false);
@@ -209,17 +209,28 @@ export default function SettingsPage() {
 
     setIsStartingNewMonth(true);
     try {
-      const token = await getToken();
-      const result = await startNewMonthAction(token, monthResetPassword);
-      if (result.success) {
-        toast({
-          title: "New Month Started!",
-          description: result.message,
-        });
-        setMonthResetPassword("");
-      } else {
-        throw new Error(result.error || "An unknown error occurred.");
+      const currentPassword = await getAdminPassword();
+      if (!currentPassword || currentPassword !== monthResetPassword) {
+        throw new Error("Invalid admin password.");
       }
+
+      const rollover = await rolloverMonthWithArchive();
+      await addAdminAuditLog({
+        action: "month.rollover.start",
+        metadata: {
+          archiveId: rollover.id,
+          periodLabel: rollover.periodLabel,
+          expenseCount: rollover.expenseCount,
+          contributionCount: rollover.contributionCount,
+          messageCount: rollover.messageCount,
+        },
+      });
+
+      toast({
+        title: "New Month Started!",
+        description: `New month started. Archived ${rollover.periodLabel} data for history.`,
+      });
+      setMonthResetPassword("");
     } catch (error: unknown) {
       toast({
         variant: "destructive",

@@ -17,19 +17,20 @@ import type { Expense, Contribution, User } from "@/lib/types";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import {
+  addContribution,
+  addExpense,
+  addAdminAuditLog,
   subscribeToExpenses,
   subscribeToContributions,
   subscribeToUsers,
 } from "@/lib/firestore";
 import { ContributionChart } from "@/components/dashboard/contribution-chart";
 import { DashboardShimmer } from "@/components/shimmers/dashboard-shimmer";
-import { createContributionAction, createExpenseAction } from "@/app/actions";
 import { CalendarDays } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
 
 export default function DashboardPage() {
-  const { currentUser, isAdmin, isAuthLoading, isAppConfigured, getToken } =
-    useAuth();
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -104,13 +105,23 @@ export default function DashboardPage() {
         share,
       })),
     };
-    const token = await getToken();
-    const result = await createExpenseAction(token, {
-      ...expenseToAdd,
-      dateIso: newExpense.date.toISOString(),
+    await addExpense({
+      description: expenseToAdd.description,
+      amount: expenseToAdd.amount,
+      payerId: expenseToAdd.payerId,
+      tags: expenseToAdd.tags,
+      participants: expenseToAdd.participants,
+      date: newExpense.date,
     });
-    if (!result.success) {
-      throw new Error(result.error || "Failed to add expense.");
+    if (isAdmin) {
+      await addAdminAuditLog({
+        action: "expense.create",
+        metadata: {
+          payerId: expenseToAdd.payerId,
+          amount: expenseToAdd.amount,
+          participantCount: expenseToAdd.participants.length,
+        },
+      });
     }
   };
 
@@ -123,13 +134,19 @@ export default function DashboardPage() {
       amount: newContribution.amount,
       date: new Date(),
     };
-    const token = await getToken();
-    const result = await createContributionAction(token, {
-      ...contributionToAdd,
-      dateIso: contributionToAdd.date.toISOString(),
+    await addContribution({
+      contributorId: contributionToAdd.contributorId,
+      amount: contributionToAdd.amount,
+      date: contributionToAdd.date,
     });
-    if (!result.success) {
-      throw new Error(result.error || "Failed to add contribution.");
+    if (isAdmin) {
+      await addAdminAuditLog({
+        action: "contribution.create",
+        metadata: {
+          contributorId: contributionToAdd.contributorId,
+          amount: contributionToAdd.amount,
+        },
+      });
     }
   };
 

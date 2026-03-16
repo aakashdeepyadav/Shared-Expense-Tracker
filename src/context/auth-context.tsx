@@ -18,7 +18,7 @@ import {
   getAllUsers,
   createMemberFromSignup,
 } from "@/lib/firestore";
-import { auth } from "@/lib/firebase";
+import { auth, loadRuntimeFirebaseConfig } from "@/lib/firebase";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -223,6 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- Init app and users ---
   useEffect(() => {
     const initialize = async () => {
+      loadRuntimeFirebaseConfig();
       setIsAuthLoading(true);
       setIsDataLoading(true);
       try {
