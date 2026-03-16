@@ -55,6 +55,7 @@ const chartColors = [
   "hsl(var(--chart-4))",
   "hsl(var(--chart-5))",
 ];
+const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
 
 type GenerateReportOutput = {
   report: string;
@@ -107,7 +108,7 @@ function buildClientReport(
   });
 
   expenses.forEach((expense) => {
-    if (expense.payerId !== "tifresh") {
+    if (expense.payerId !== WALLET_PAYER_ID) {
       const payer = memberBalances.get(expense.payerId);
       if (payer) {
         payer.paid += expense.amount;
@@ -333,7 +334,9 @@ export default function ReportsPage() {
               <div className="flex items-center gap-4">
                 <Logo className="h-16 w-16" />
                 <div>
-                  <h1 className="text-3xl font-bold m-0">TiFresh</h1>
+                  <h1 className="text-3xl font-bold m-0">
+                    Shared Expense Tracker
+                  </h1>
                   <p className="text-muted-foreground m-0">Financial Report</p>
                 </div>
               </div>

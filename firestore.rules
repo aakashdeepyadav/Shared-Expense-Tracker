@@ -1,42 +1,9 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // NOTE:
-    // This project currently has mixed auth patterns (member OTP + local admin session token).
-    // Until server-side admin auth is fully enforced with custom claims/Admin SDK,
-    // signed-in users are allowed app access here and admin-sensitive writes should remain
-    // protected through server actions and application checks.
-
-    match /config/{docId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /users/{userId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /expenses/{expenseId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /contributions/{contributionId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /messages/{messageId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /auditLogs/{entryId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /monthArchives/{archiveId} {
-      allow read, write: if isSignedIn();
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

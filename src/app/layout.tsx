@@ -17,7 +17,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 // This is outside because metadata can't be in a client component
 // export const metadata: Metadata = {
-//   title: "TiFresh",
+//   title: "Shared Expense Tracker",
 //   description: "Your friendly expense splitting assistant.",
 // };
 

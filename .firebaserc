@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "tifresh-assistant"
-  }
+    "default": "shared-expense-tracker-78e4e"
+  },
+  "targets": {},
+  "etags": {}
 }

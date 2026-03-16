@@ -33,7 +33,7 @@ import type {
 import { FirestorePermissionError } from './errors';
 import { errorEmitter } from './error-emitter';
 
-const DEFAULT_AVATAR = 'https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png';
+const DEFAULT_AVATAR = 'https://placehold.co/128x128/png?text=User';
 const ARCHIVE_RETENTION_DAYS = 365;
 
 function sanitizeMemberId(value: string): string {

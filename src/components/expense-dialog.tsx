@@ -67,6 +67,8 @@ type ExpenseDialogProps = {
   users: User[];
 };
 
+const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
+
 export function ExpenseDialog({
   children,
   open,
@@ -80,7 +82,7 @@ export function ExpenseDialog({
   const defaultValues = React.useMemo(
     () => ({
       amount: 0,
-      payerId: "tifresh",
+      payerId: WALLET_PAYER_ID,
       date: new Date(),
       tags: [],
       participants: users.map((u) => u.id),
@@ -257,8 +259,8 @@ export function ExpenseDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="tifresh">
-                          TiFresh (Wallet)
+                        <SelectItem value={WALLET_PAYER_ID}>
+                          Shared Expense Tracker (Wallet)
                         </SelectItem>
                         {users.map((user) => (
                           <SelectItem key={user.id} value={user.id}>

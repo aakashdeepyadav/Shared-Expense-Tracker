@@ -93,6 +93,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // --- Constants ---
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 5;
+const LOCAL_USER_ID_KEY = "shared-expense-tracker-userid";
 
 // --- Helper functions (lockout logic) ---
 const getAttemptsKey = (role: "admin" | "member", userId?: string) =>
@@ -267,7 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         try {
           // Admin user is handled separately as it doesn't use Firebase Auth.
-          const storedAdminId = localStorage.getItem("tifresh-userid");
+          const storedAdminId = localStorage.getItem(LOCAL_USER_ID_KEY);
           if (storedAdminId === "admin") {
             const adminUser = await getUser("admin");
             if (adminUser) {
@@ -276,10 +277,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               setCurrentUser(null);
               setIsAdmin(false);
-              localStorage.removeItem("tifresh-userid");
+              localStorage.removeItem(LOCAL_USER_ID_KEY);
             }
           } else if (firebaseUser) {
-            const storedId = localStorage.getItem("tifresh-userid");
+            const storedId = localStorage.getItem(LOCAL_USER_ID_KEY);
             if (storedId) {
               const appUser = await getUser(storedId);
               if (appUser) {
@@ -294,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else {
             setCurrentUser(null);
             setIsAdmin(false);
-            localStorage.removeItem("tifresh-userid");
+            localStorage.removeItem(LOCAL_USER_ID_KEY);
           }
         } catch (authStateError) {
           if (!isPermissionDeniedError(authStateError)) {
@@ -305,7 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setCurrentUser(null);
           setIsAdmin(false);
-          localStorage.removeItem("tifresh-userid");
+          localStorage.removeItem(LOCAL_USER_ID_KEY);
         } finally {
           setIsAuthLoading(false);
         }
@@ -400,7 +401,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (adminPassword && credential === adminPassword) {
       const adminUser = await getUser("admin");
       if (adminUser) {
-        localStorage.setItem("tifresh-userid", "admin");
+        localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
         setCurrentUser(adminUser);
         setIsAdmin(true);
         clearLoginAttempts(key);
@@ -486,7 +487,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const appUser = await getUser(pendingUserId);
       if (appUser) {
         // Store user ID, set current user state immediately
-        localStorage.setItem("tifresh-userid", pendingUserId);
+        localStorage.setItem(LOCAL_USER_ID_KEY, pendingUserId);
         setCurrentUser(appUser);
         setIsAdmin(false);
         router.push("/");
@@ -509,7 +510,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- Logout ---
   const logout = async () => {
     if (isAdmin) {
-      localStorage.removeItem("tifresh-userid");
+      localStorage.removeItem(LOCAL_USER_ID_KEY);
       setCurrentUser(null);
       setIsAdmin(false);
       router.push("/login");
@@ -522,7 +523,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getToken = async (): Promise<string | null> => {
     if (isAdmin) {
       // For admin, the "token" is just the raw value in local storage.
-      return localStorage.getItem("tifresh-userid");
+      return localStorage.getItem(LOCAL_USER_ID_KEY);
     }
     if (auth.currentUser) {
       // For regular users, it's the Firebase ID token.

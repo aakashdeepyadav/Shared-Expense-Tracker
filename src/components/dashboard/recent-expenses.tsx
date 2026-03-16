@@ -17,13 +17,14 @@ type RecentExpensesProps = {
   users: User[];
 };
 
+const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
+
 export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
   const userMap = new Map(users.map((user) => [user.id, user]));
-  userMap.set("tifresh", {
-    id: "tifresh",
-    name: "TiFresh",
-    avatarUrl:
-      "https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png",
+  userMap.set(WALLET_PAYER_ID, {
+    id: WALLET_PAYER_ID,
+    name: "Wallet",
+    avatarUrl: "https://placehold.co/64x64/png?text=W",
     pin: "",
   });
 

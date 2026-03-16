@@ -58,7 +58,7 @@ export function PageHeader({
       <div className="hidden sm:flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
         <Logo className="h-4 w-4" />
         <span className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground">
-          TiFresh
+          SET
         </span>
       </div>
       <h1 className="flex-1 text-base font-semibold tracking-tight md:text-xl">

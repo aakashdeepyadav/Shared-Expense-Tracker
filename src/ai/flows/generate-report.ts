@@ -14,6 +14,8 @@ import { getAllUsers, getAllExpensesForReport, getAllContributionsForReport } fr
 import type { User, Expense, Contribution } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 
+const WALLET_PAYER_ID = 'shared-expense-tracker-wallet';
+
 const ExpenseByCategorySchema = z.object({
   category: z.string().describe('The name of the expense category/tag.'),
   total: z.number().describe('The total amount spent in this category/tag.'),
@@ -121,7 +123,7 @@ const generateReportFlow = ai.defineFlow(
 
     typedExpenses.forEach(e => {
         // Only credit the expense to a member if they paid for it personally, not from the wallet
-        if (e.payerId !== 'tifresh') {
+        if (e.payerId !== WALLET_PAYER_ID) {
              const payerBalance = memberBalances.get(e.payerId);
              if (payerBalance) {
                 payerBalance.paid += e.amount;
