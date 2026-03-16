@@ -10,6 +10,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
   Timestamp,
   writeBatch,
   onSnapshot,
@@ -29,11 +30,11 @@ import type {
   MonthArchive,
   MonthArchiveSummary,
 } from './types';
-import { users as mockUsers, adminPassword as mockAdminPassword } from './data';
 import { FirestorePermissionError } from './errors';
 import { errorEmitter } from './error-emitter';
 
 const DEFAULT_AVATAR = 'https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png';
+const ARCHIVE_RETENTION_DAYS = 365;
 
 function sanitizeMemberId(value: string): string {
   const normalized = value
@@ -828,6 +829,16 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
   const batch = writeBatch(db);
   batch.set(archiveRef, archivesData);
 
+  const retentionCutoff = new Date(now.getTime() - ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const oldArchivesQuery = query(
+    collection(db, 'monthArchives'),
+    where('archivedAt', '<', Timestamp.fromDate(retentionCutoff)),
+  );
+  const oldArchivesSnapshot = await getDocs(oldArchivesQuery);
+  oldArchivesSnapshot.docs.forEach((entry) => {
+    batch.delete(entry.ref);
+  });
+
   if (appConfig?.initialized) {
     batch.update(appConfigRef, {
       currentPeriodStart: nowIso,
@@ -866,39 +877,3 @@ export async function rolloverMonthWithArchive(): Promise<MonthArchiveSummary> {
 }
 
 
-// --- Data Seeding Function ---
-export async function seedDatabase() {
-    const appConfig = await getAppConfig();
-    if (appConfig?.initialized) {
-      return;
-    }
-
-    const usersCol = collection(db, 'users');
-  try {
-    const usersSnapshot = await getDocs(query(usersCol, limit(1)));
-    
-    if (usersSnapshot.empty) {
-      console.log('No users found. Seeding database...');
-      const batch = writeBatch(db);
-
-      mockUsers.forEach(user => {
-        const { id, ...userData } = user;
-        const userDocRef = doc(db, 'users', id);
-        batch.set(userDocRef, userData);
-      });
-
-      const configDocRef = doc(db, 'config', 'admin');
-      batch.set(configDocRef, { password: mockAdminPassword });
-
-      await batch.commit();
-      console.log('Database seeded successfully.');
-    }
-  } catch (error) {
-    const permissionError = new FirestorePermissionError({
-      path: usersCol.path,
-      operation: 'list',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    throw error;
-  }
-}

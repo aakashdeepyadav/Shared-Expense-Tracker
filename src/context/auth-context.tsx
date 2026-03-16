@@ -18,12 +18,7 @@ import {
   getAllUsers,
   createMemberFromSignup,
 } from "@/lib/firestore";
-import { auth, loadRuntimeFirebaseConfig } from "@/lib/firebase";
-import {
-  getActiveControlGroupId,
-  getGroupControlRecord,
-  setActiveControlGroupId,
-} from "@/lib/control-plane";
+import { auth } from "@/lib/firebase";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -39,7 +34,6 @@ interface AuthContextType {
   isAuthLoading: boolean;
   isDataLoading: boolean;
   isAppConfigured: boolean;
-  setupBlockReason: string | null;
   appConfig: AppConfig | null;
   users: User[];
   login: (
@@ -66,7 +60,6 @@ interface AuthContextType {
     payload: MemberSignupInput,
   ) => Promise<{ success: boolean; message?: string }>;
   refreshAppSetup: () => Promise<void>;
-  retryControlVerification: () => Promise<boolean>;
   getLockoutTime: (role: "admin" | "member", userId?: string) => number;
   getToken: () => Promise<string | null>;
 }
@@ -139,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [isAppConfigured, setIsAppConfigured] = useState(false);
-  const [setupBlockReason, setSetupBlockReason] = useState<string | null>(null);
 
   // State for OTP flow
   const [confirmationResult, setConfirmationResult] =
@@ -148,32 +140,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const router = useRouter();
   const pathname = usePathname();
-
-  const validateControlPlaneState = useCallback(
-    async (groupId?: string): Promise<string | null> => {
-      const resolvedGroupId = groupId || getActiveControlGroupId();
-      if (!resolvedGroupId) {
-        return "No approved group found in control plane. Please complete signup setup.";
-      }
-
-      const controlRecord = await getGroupControlRecord(resolvedGroupId);
-      if (!controlRecord) {
-        return "Group is not registered in control plane. Please run signup setup again.";
-      }
-
-      const isReady =
-        controlRecord.onboardingStatus === "completed" &&
-        controlRecord.otpVerified === true;
-
-      if (!isReady) {
-        return "Group verification is incomplete. Ensure admin OTP setup is completed.";
-      }
-
-      setActiveControlGroupId(resolvedGroupId);
-      return null;
-    },
-    [],
-  );
 
   // --- Setup reCAPTCHA ---
   const setupRecaptcha = useCallback(() => {
@@ -257,36 +223,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- Init app and users ---
   useEffect(() => {
     const initialize = async () => {
-      loadRuntimeFirebaseConfig();
       setIsAuthLoading(true);
       setIsDataLoading(true);
       try {
         const loadedConfig = await getAppConfig();
-        const tenantGroupId = loadedConfig?.groupId;
-
-        if (loadedConfig?.initialized) {
-          const controlError = await validateControlPlaneState(tenantGroupId);
-          if (controlError) {
-            setSetupBlockReason(controlError);
-            setAppConfig(null);
-            setIsAppConfigured(false);
-            setUsers([]);
-            setCurrentUser(null);
-            setIsAdmin(false);
-            setIsDataLoading(false);
-            setIsAuthLoading(false);
-            return;
-          }
-        }
-
-        setSetupBlockReason(null);
 
         setAppConfig(loadedConfig);
         setIsAppConfigured(!!loadedConfig?.initialized);
-
-        if (loadedConfig?.initialized && tenantGroupId) {
-          setActiveControlGroupId(tenantGroupId);
-        }
 
         if (!loadedConfig?.initialized) {
           setUsers([]);
@@ -315,9 +258,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isPermissionDeniedError(error)) {
           console.error("Initialization error:", error);
         }
-        setSetupBlockReason(
-          "Could not validate setup state. Please retry signup setup.",
-        );
         setAppConfig(null);
         setIsAppConfigured(false);
       } finally {
@@ -375,41 +315,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initialize();
-  }, [validateControlPlaneState]);
+  }, []);
 
   const refreshAppSetup = async () => {
     const loadedConfig = await getAppConfig();
-    const controlError = await validateControlPlaneState(loadedConfig?.groupId);
-
-    if (loadedConfig?.initialized && controlError) {
-      setSetupBlockReason(controlError);
-      setAppConfig(null);
-      setIsAppConfigured(false);
-      setUsers([]);
-      return;
-    }
-
-    setSetupBlockReason(null);
     setAppConfig(loadedConfig);
     setIsAppConfigured(!!loadedConfig?.initialized);
     if (loadedConfig?.initialized) {
-      if (loadedConfig.groupId) {
-        setActiveControlGroupId(loadedConfig.groupId);
-      }
       const fetchedUsers = await getAllUsers();
       setUsers(fetchedUsers);
-    }
-  };
-
-  const retryControlVerification = async (): Promise<boolean> => {
-    try {
-      await refreshAppSetup();
-      return true;
-    } catch (error) {
-      setSetupBlockReason(
-        getErrorMessage(error) || "Control-plane verification failed.",
-      );
-      return false;
     }
   };
 
@@ -659,7 +573,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthLoading,
     isDataLoading,
     isAppConfigured,
-    setupBlockReason,
     appConfig,
     users,
     login,
@@ -670,7 +583,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateUserCredential,
     registerMember,
     refreshAppSetup,
-    retryControlVerification,
     getLockoutTime,
     getToken,
   };

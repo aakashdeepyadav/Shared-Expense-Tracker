@@ -45,18 +45,15 @@ export default function LoginPage() {
     currentUser,
     isAuthLoading,
     isAppConfigured,
-    setupBlockReason,
     appConfig,
     users,
     isDataLoading,
-    retryControlVerification,
     getLockoutTime,
     verifyPin,
     savePhoneNumberAndSendOtp,
     verifyOtp,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isRetryingVerification, setIsRetryingVerification] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
@@ -80,7 +77,6 @@ export default function LoginPage() {
     };
     checkLockout();
 
-    // Check every second to update the timer
     const interval = setInterval(() => {
       const lockedUntil = getLockoutTime(role, selectedUserId);
       setLockoutTime(lockedUntil);
@@ -129,7 +125,6 @@ export default function LoginPage() {
       setIsLoggingIn(false);
     } else if (loginStep === "phoneNumber") {
       setIsLoggingIn(true);
-      // Basic validation for Indian phone number
       if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
         toast({
           variant: "destructive",
@@ -160,7 +155,6 @@ export default function LoginPage() {
       if (!result.success) {
         handleLoginFailure(result);
       }
-      // On success, AuthProvider will handle redirect
       setIsLoggingIn(false);
     }
   };
@@ -249,44 +243,16 @@ export default function LoginPage() {
             <Logo className="mb-4 h-16 w-16" />
             <CardTitle>Welcome to Shared Expense Tracker</CardTitle>
             <CardDescription>
-              Login screen is ready. To use this app for a new group, complete
-              signup setup first.
+              Create a group once using Signup, then login and use the app.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {setupBlockReason && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Setup Verification Required</AlertTitle>
-                <AlertDescription>{setupBlockReason}</AlertDescription>
-              </Alert>
-            )}
             <Button className="w-full" asChild>
               <Link href="/setup">
                 Signup
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            {setupBlockReason && (
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={isRetryingVerification}
-                onClick={async () => {
-                  setIsRetryingVerification(true);
-                  const ok = await retryControlVerification();
-                  if (ok) {
-                    toast({
-                      title: "Verification refreshed",
-                      description: "Control-plane status has been re-checked.",
-                    });
-                  }
-                  setIsRetryingVerification(false);
-                }}
-              >
-                {isRetryingVerification ? "Checking..." : "Retry Verification"}
-              </Button>
-            )}
             <Button variant="outline" className="w-full" disabled>
               Login will be enabled after setup
             </Button>
@@ -500,9 +466,8 @@ export default function LoginPage() {
 
             <TabsContent value="signup" className="space-y-4">
               <div className="rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
-                Use this when you want to create a brand-new group tracker on
-                your Firebase project. The setup wizard will collect group
-                details, members, admin password, and Firebase config.
+                Create a new group. All data will be stored in this app&apos;s
+                Firebase project.
               </div>
               <Button className="w-full" asChild>
                 <Link href="/setup">
