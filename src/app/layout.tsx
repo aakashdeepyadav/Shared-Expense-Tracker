@@ -1,7 +1,5 @@
-
 "use client";
 
-import type { Metadata } from "next";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,11 +8,12 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { OfflineBanner } from "@/components/offline-banner";
 import { AuthProvider, useAuth } from "@/context/auth-context";
-import { Inter } from 'next/font/google'
+import { Inter } from "next/font/google";
 import { AppBottomNav } from "@/components/app-bottom-nav";
-import { LoginShimmer } from "@/components/shimmers/login-shimmer";
 import React from "react";
 import FirebaseErrorListener from "@/components/FirebaseErrorListener";
+import { useTheme } from "next-themes";
+import { usePathname, useRouter } from "next/navigation";
 
 // This is outside because metadata can't be in a client component
 // export const metadata: Metadata = {
@@ -23,34 +22,122 @@ import FirebaseErrorListener from "@/components/FirebaseErrorListener";
 // };
 
 const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-})
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+function AppSignature() {
+  return (
+    <p className="py-3 text-center text-xs text-muted-foreground/80">
+      Made with ❤ by Aakash.
+    </p>
+  );
+}
 
 function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { isAuthLoading } = useAuth();
-  
+  const { isAuthLoading, appConfig, isAppConfigured, currentUser } = useAuth();
+  const { setTheme } = useTheme();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isMounted, setIsMounted] = React.useState(false);
+  const isAuthPage = pathname === "/login" || pathname === "/setup";
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (appConfig?.themePreference) {
+      setTheme(appConfig.themePreference);
+    }
+  }, [appConfig?.themePreference, setTheme]);
+
+  React.useEffect(() => {
+    if (!isMounted || isAuthLoading) {
+      return;
+    }
+
+    if (!isAppConfigured && !isAuthPage) {
+      router.replace("/setup");
+      return;
+    }
+
+    if (isAppConfigured && pathname === "/setup") {
+      router.replace(currentUser ? "/" : "/login");
+      return;
+    }
+
+    if (isAppConfigured && !currentUser && pathname !== "/login") {
+      router.replace("/login");
+    }
+  }, [
+    isMounted,
+    isAuthLoading,
+    isAppConfigured,
+    isAuthPage,
+    pathname,
+    currentUser,
+    router,
+  ]);
+
   // Set metadata dynamically
   if (typeof window !== "undefined") {
-    document.title = "TiFresh - Your friendly expense splitting assistant.";
+    const trackerName = appConfig?.groupName || "Shared Expense Tracker";
+    document.title = `${trackerName} - Shared Expense Tracker`;
   }
 
-  if (isAuthLoading) {
-    return <LoginShimmer />;
+  if (!isMounted) {
+    return <main className="min-h-screen w-full" />;
   }
-  
+
+  if (isAuthLoading && !isAuthPage) {
+    return (
+      <main className="flex min-h-screen w-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading app...</p>
+      </main>
+    );
+  }
+
+  if (
+    !isAuthLoading &&
+    ((!isAppConfigured && !isAuthPage) ||
+      (isAppConfigured && pathname === "/setup") ||
+      (isAppConfigured && !currentUser && pathname !== "/login"))
+  ) {
+    return (
+      <main className="flex min-h-screen w-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Redirecting...</p>
+      </main>
+    );
+  }
+
+  if (isAuthPage) {
+    return (
+      <>
+        <OfflineBanner />
+        <main className="relative min-h-screen">{children}</main>
+        <AppSignature />
+        <Toaster />
+        <FirebaseErrorListener />
+      </>
+    );
+  }
+
   return (
     <>
       <OfflineBanner />
       <SidebarProvider>
-        <div className="flex">
+        <div className="page-shell flex min-h-screen">
           <AppSidebar />
-          <main className="flex-1 min-w-0 pb-16 md:pb-0">{children}</main>
+          <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
+            {children}
+            <AppSignature />
+          </main>
         </div>
         <AppBottomNav />
       </SidebarProvider>
@@ -60,7 +147,6 @@ function AppLayout({
   );
 }
 
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -69,12 +155,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
-      <body
-        className={cn(
-          "min-h-screen bg-background font-body antialiased"
-        )}
-      >
+      <body className={cn("min-h-screen bg-background font-body antialiased")}>
         <AuthProvider>
           <ThemeProvider
             attribute="class"
@@ -82,12 +165,10 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-           <AppLayout>{children}</AppLayout>
+            <AppLayout>{children}</AppLayout>
           </ThemeProvider>
         </AuthProvider>
       </body>
     </html>
   );
 }
-
-    

@@ -1,15 +1,15 @@
 // A simple, browser-safe event emitter.
 class SafeEventEmitter {
-  private events: Record<string, ((...args: any[]) => void)[]> = {};
+  private events: Record<string, ((...args: unknown[]) => void)[]> = {};
 
-  on(event: string, listener: (...args: any[]) => void) {
+  on(event: string, listener: (...args: unknown[]) => void) {
     if (!this.events[event]) {
       this.events[event] = [];
     }
     this.events[event].push(listener);
   }
 
-  off(event: string, listener: (...args: any[]) => void) {
+  off(event: string, listener: (...args: unknown[]) => void) {
     if (!this.events[event]) return;
 
     const index = this.events[event].indexOf(listener);
@@ -18,7 +18,7 @@ class SafeEventEmitter {
     }
   }
 
-  emit(event: string, ...args: any[]) {
+  emit(event: string, ...args: unknown[]) {
     if (!this.events[event]) return;
     
     // Create a copy of the listeners array in case one of them modifies the original array

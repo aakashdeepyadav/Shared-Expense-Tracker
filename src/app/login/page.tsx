@@ -1,7 +1,7 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Select,
   SelectContent,
@@ -23,28 +23,46 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
-import { LoginShimmer } from "@/components/shimmers/login-shimmer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type LoginStep = 'credentials' | 'phoneNumber' | 'otp';
+type LoginStep = "credentials" | "phoneNumber" | "otp";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
   const [role, setRole] = useState<"member" | "admin">("member");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [pin, setPin] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
+  const [signupName, setSignupName] = useState("");
+  const [signupPin, setSignupPin] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
+  const [signupType, setSignupType] = useState("student");
   const { toast } = useToast();
-  const { login, currentUser, isAuthLoading, users, isDataLoading, getLockoutTime, verifyPin, savePhoneNumberAndSendOtp, verifyOtp } =
-    useAuth();
+  const {
+    login,
+    currentUser,
+    isAuthLoading,
+    isAppConfigured,
+    appConfig,
+    users,
+    isDataLoading,
+    getLockoutTime,
+    verifyPin,
+    savePhoneNumberAndSendOtp,
+    verifyOtp,
+    registerMember,
+  } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [loginStep, setLoginStep] = useState<LoginStep>('credentials');
+  const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
 
   useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -53,246 +71,394 @@ export default function LoginPage() {
   }, [currentUser, isAuthLoading, router]);
 
   useEffect(() => {
-    const checkLockout = () => {
-        const lockedUntil = getLockoutTime(role, selectedUserId);
-        setLockoutTime(lockedUntil);
+    if (!isAppConfigured) {
+      setLockoutTime(0);
+      setTimeRemaining(0);
+      return;
     }
+
+    const checkLockout = () => {
+      const lockedUntil = getLockoutTime(role, selectedUserId);
+      setLockoutTime(lockedUntil);
+    };
     checkLockout();
-    
+
     // Check every second to update the timer
     const interval = setInterval(() => {
-        const lockedUntil = getLockoutTime(role, selectedUserId);
-        setLockoutTime(lockedUntil);
-        if (lockedUntil > Date.now()) {
-            setTimeRemaining(Math.ceil((lockedUntil - Date.now()) / 1000));
-        } else {
-            setTimeRemaining(0);
-        }
+      const lockedUntil = getLockoutTime(role, selectedUserId);
+      setLockoutTime(lockedUntil);
+      if (lockedUntil > Date.now()) {
+        setTimeRemaining(Math.ceil((lockedUntil - Date.now()) / 1000));
+      } else {
+        setTimeRemaining(0);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-
-  }, [role, selectedUserId, getLockoutTime]);
+  }, [isAppConfigured, role, selectedUserId, getLockoutTime]);
 
   const handleAdminLogin = async () => {
     setIsLoggingIn(true);
-    const result = await login('admin', adminPassword);
-     if (result.success) {
-        toast({ title: "Admin Login Successful!", description: "Welcome, Admin!" });
-      } else {
-        handleLoginFailure(result);
-      }
+    const result = await login("admin", adminPassword);
+    if (result.success) {
+      toast({
+        title: "Admin Login Successful!",
+        description: "Welcome, Admin!",
+      });
+    } else {
+      handleLoginFailure(result);
+    }
     setIsLoggingIn(false);
-  }
+  };
 
   const handleMemberLogin = async () => {
-     if (loginStep === 'credentials') {
+    if (loginStep === "credentials") {
       setIsLoggingIn(true);
       const result = await verifyPin(selectedUserId, pin);
 
       if (result.success) {
         if (result.needsPhoneNumber) {
-          setLoginStep('phoneNumber');
+          setLoginStep("phoneNumber");
         } else {
-          toast({ title: "OTP Sent", description: "An OTP has been sent to your phone." });
-          setLoginStep('otp');
+          toast({
+            title: "OTP Sent",
+            description: "An OTP has been sent to your phone.",
+          });
+          setLoginStep("otp");
         }
       } else {
         handleLoginFailure(result);
       }
       setIsLoggingIn(false);
-
-    } else if (loginStep === 'phoneNumber') {
+    } else if (loginStep === "phoneNumber") {
       setIsLoggingIn(true);
       // Basic validation for Indian phone number
       if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
-        toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit Indian mobile number." });
+        toast({
+          variant: "destructive",
+          title: "Invalid Phone Number",
+          description: "Please enter a valid 10-digit Indian mobile number.",
+        });
         setIsLoggingIn(false);
         return;
       }
       const fullPhoneNumber = `+91${phoneNumber}`;
-      const result = await savePhoneNumberAndSendOtp(selectedUserId, fullPhoneNumber);
+      const result = await savePhoneNumberAndSendOtp(
+        selectedUserId,
+        fullPhoneNumber,
+      );
       if (result.success) {
-        toast({ title: "Phone Number Saved & OTP Sent", description: "An OTP has been sent to your phone." });
-        setLoginStep('otp');
+        toast({
+          title: "Phone Number Saved & OTP Sent",
+          description: "An OTP has been sent to your phone.",
+        });
+        setLoginStep("otp");
       } else {
         handleLoginFailure(result);
       }
-       setIsLoggingIn(false);
-
-    } else { // 'otp' step
+      setIsLoggingIn(false);
+    } else {
       setIsLoggingIn(true);
       const result = await verifyOtp(otp);
       if (!result.success) {
         handleLoginFailure(result);
       }
       // On success, AuthProvider will handle redirect
-       setIsLoggingIn(false);
+      setIsLoggingIn(false);
     }
-  }
-  
-  const handleLogin = async () => {
-      if (role === 'admin') {
-          await handleAdminLogin();
-      } else {
-          await handleMemberLogin();
-      }
   };
-  
-  const handleLoginFailure = (result: { success: boolean, lockedUntil?: number, message?: string }) => {
-     if (result.lockedUntil) {
-            setLockoutTime(result.lockedUntil);
-            setTimeRemaining(Math.ceil((result.lockedUntil - Date.now()) / 1000));
-     } else {
-         toast({
-            variant: "destructive",
-            title: "Login Failed",
-            description: result.message || "An error occurred. Please try again.",
-        });
-     }
-     // Don't reset pin/password on lockout, only on other failures.
-     if (!result.lockedUntil) {
-        setPin("");
-        setAdminPassword("");
-        setOtp("");
-     }
-  }
-  
+
+  const handleLogin = async () => {
+    if (role === "admin") {
+      await handleAdminLogin();
+    } else {
+      await handleMemberLogin();
+    }
+  };
+
+  const handleLoginFailure = (result: {
+    success: boolean;
+    lockedUntil?: number;
+    message?: string;
+  }) => {
+    if (result.lockedUntil) {
+      setLockoutTime(result.lockedUntil);
+      setTimeRemaining(Math.ceil((result.lockedUntil - Date.now()) / 1000));
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: result.message || "An error occurred. Please try again.",
+      });
+    }
+    if (!result.lockedUntil) {
+      setPin("");
+      setAdminPassword("");
+      setOtp("");
+    }
+  };
+
+  const handleMemberSignup = async () => {
+    if (!signupName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Name required",
+        description: "Please enter your name.",
+      });
+      return;
+    }
+    if (!/^\d{6}$/.test(signupPin)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid PIN",
+        description: "PIN must be exactly 6 digits.",
+      });
+      return;
+    }
+    if (signupPhone && !/^[6-9]\d{9}$/.test(signupPhone)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid phone",
+        description: "Phone must be a valid 10-digit Indian number.",
+      });
+      return;
+    }
+
+    setIsRegistering(true);
+    const result = await registerMember({
+      name: signupName,
+      pin: signupPin,
+      phoneNumber: signupPhone ? `+91${signupPhone}` : undefined,
+      memberType: signupType,
+    });
+    setIsRegistering(false);
+
+    if (result.success) {
+      toast({
+        title: "Member registered",
+        description: "Account created. You can sign in now.",
+      });
+      setSignupName("");
+      setSignupPin("");
+      setSignupPhone("");
+      setSignupType("student");
+      setActiveTab("login");
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Signup failed",
+        description: result.message || "Could not create member account.",
+      });
+    }
+  };
+
   const isLocked = lockoutTime > Date.now();
-  
+
   const resetLoginFlow = () => {
-    setLoginStep('credentials');
-    setPin('');
-    setOtp('');
-    setPhoneNumber('');
-  }
+    setLoginStep("credentials");
+    setPin("");
+    setOtp("");
+    setPhoneNumber("");
+  };
 
   const getButtonText = () => {
     if (isLoggingIn) {
       switch (loginStep) {
-        case 'credentials': return "Verifying PIN...";
-        case 'phoneNumber': return "Saving & Sending OTP...";
-        case 'otp': return "Verifying OTP...";
+        case "credentials":
+          return "Verifying PIN...";
+        case "phoneNumber":
+          return "Saving & Sending OTP...";
+        case "otp":
+          return "Verifying OTP...";
       }
     }
     switch (loginStep) {
-      case 'credentials': return "Sign In";
-      case 'phoneNumber': return "Save & Send OTP";
-      case 'otp': return "Verify OTP & Sign In";
-      default: return "Sign In";
+      case "credentials":
+        return "Sign In";
+      case "phoneNumber":
+        return "Save & Send OTP";
+      case "otp":
+        return "Verify OTP & Sign In";
+      default:
+        return "Sign In";
     }
+  };
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-[100dvh] w-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading account...</p>
+      </div>
+    );
   }
 
-  // The global shimmer in RootLayout handles the isAuthLoading case
-  if (isAuthLoading || currentUser) {
+  if (currentUser) {
     return null;
   }
 
+  if (!isAppConfigured) {
+    return (
+      <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden p-4">
+        <div className="pointer-events-none absolute -left-16 top-10 h-60 w-60 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/20" />
+        <div className="pointer-events-none absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl dark:bg-amber-500/20" />
+        <Card className="modern-surface w-full max-w-lg border-0 shadow-xl">
+          <CardHeader className="items-center text-center">
+            <Logo className="mb-4 h-16 w-16" />
+            <CardTitle>Welcome to Shared Expense Tracker</CardTitle>
+            <CardDescription>
+              This project is not configured yet. Create your group tracker
+              instance first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full" asChild>
+              <Link href="/setup">Start Setup Wizard</Link>
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/">Go Dashboard</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm shadow-lg">
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden p-4">
+      <div className="pointer-events-none absolute -left-16 top-10 h-60 w-60 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/20" />
+      <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-emerald-300/25 blur-3xl dark:bg-emerald-500/20" />
+      <div className="pointer-events-none absolute -right-14 bottom-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl dark:bg-amber-500/20" />
+      <Card className="modern-surface w-full max-w-md border-0 shadow-xl">
         <CardHeader className="items-center text-center">
           <Logo className="mb-4 h-16 w-16" />
-          <CardTitle>Welcome to TiFresh</CardTitle>
-          <CardDescription>Sign in to continue</CardDescription>
+          <CardTitle className="text-2xl tracking-tight">
+            Welcome to {appConfig?.groupName || "Shared Expense Tracker"}
+          </CardTitle>
+          <CardDescription>Sign in or create a member account</CardDescription>
         </CardHeader>
         <CardContent>
-           {isLocked && (
+          {isLocked && activeTab === "login" && (
             <Alert variant="destructive" className="mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Too Many Failed Attempts</AlertTitle>
-                <AlertDescription>
-                    Please try again in {Math.ceil(timeRemaining / 60)} minute(s) and {timeRemaining % 60} seconds.
-                </AlertDescription>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Too Many Failed Attempts</AlertTitle>
+              <AlertDescription>
+                Please try again in {Math.ceil(timeRemaining / 60)} minute(s)
+                and {timeRemaining % 60} seconds.
+              </AlertDescription>
             </Alert>
-           )}
-          <div className="w-full space-y-6">
-            {loginStep === 'credentials' && (
-              <>
-                 <div className="space-y-2">
-                  <Label>Login as</Label>
-                  <RadioGroup
-                    defaultValue="member"
-                    onValueChange={(value: "member" | "admin") => setRole(value)}
-                    className="flex gap-4"
-                    disabled={isLocked}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="member" id="r1" />
-                      <Label htmlFor="r1">Member</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="admin" id="r2" />
-                      <Label htmlFor="r2">Admin</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
+          )}
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as "login" | "signup")}
+          >
+            <TabsList className="grid w-full grid-cols-2 rounded-xl bg-slate-100/90 p-1 dark:bg-slate-800/80">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Signup</TabsTrigger>
+            </TabsList>
 
-                {role === "member" ? (
-                  isDataLoading ? (
-                    <div className="text-center text-muted-foreground">
-                      Loading users...
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="user-select">Select User</Label>
-                        <Select onValueChange={setSelectedUserId} value={selectedUserId} disabled={isLocked}>
-                          <SelectTrigger id="user-select">
-                            <SelectValue placeholder="Select your name" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {user.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="pin-input">PIN</Label>
-                        <Input
-                          id="pin-input"
-                          type="password"
-                          value={pin}
-                          onChange={(e) => setPin(e.target.value)}
-                          placeholder="Enter your 6-digit PIN"
-                          maxLength={6}
-                          disabled={isLoggingIn || isLocked || !selectedUserId}
-                          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                        />
-                      </div>
-                    </div>
-                  )
-                ) : (
+            <TabsContent value="login" className="space-y-6">
+              {loginStep === "credentials" && (
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="admin-password-input">Admin Password</Label>
-                    <Input
-                      id="admin-password-input"
-                      type="password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      placeholder="Enter Admin Password"
-                      disabled={isLoggingIn || isLocked}
-                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                    />
+                    <Label>Login as</Label>
+                    <RadioGroup
+                      defaultValue="member"
+                      onValueChange={(value: "member" | "admin") =>
+                        setRole(value)
+                      }
+                      className="flex gap-4"
+                      disabled={isLocked}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="member" id="r1" />
+                        <Label htmlFor="r1">Member</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="admin" id="r2" />
+                        <Label htmlFor="r2">Admin</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                )}
-              </>
-            )}
 
-            {loginStep === 'phoneNumber' && (
-              <div className="space-y-4">
-                 <div className="space-y-2">
-                   <Label htmlFor="phone-input">Enter Phone Number</Label>
+                  {role === "member" ? (
+                    isDataLoading ? (
+                      <div className="text-center text-muted-foreground">
+                        Loading users...
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="user-select">Select User</Label>
+                          <Select
+                            onValueChange={setSelectedUserId}
+                            value={selectedUserId}
+                            disabled={isLocked}
+                          >
+                            <SelectTrigger id="user-select">
+                              <SelectValue placeholder="Select your name" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {users.map((user) => (
+                                <SelectItem key={user.id} value={user.id}>
+                                  {user.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="pin-input">PIN</Label>
+                          <Input
+                            id="pin-input"
+                            type="password"
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value)}
+                            placeholder="Enter your 6-digit PIN"
+                            maxLength={6}
+                            disabled={
+                              isLoggingIn || isLocked || !selectedUserId
+                            }
+                            onKeyDown={(e) =>
+                              e.key === "Enter" && handleLogin()
+                            }
+                          />
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-password-input">
+                        Admin Password
+                      </Label>
+                      <Input
+                        id="admin-password-input"
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="Enter Admin Password"
+                        disabled={isLoggingIn || isLocked}
+                        onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {loginStep === "phoneNumber" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone-input">Enter Phone Number</Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">+91</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        +91
+                      </span>
                       <Input
                         id="phone-input"
                         type="tel"
                         value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) =>
+                          setPhoneNumber(e.target.value.replace(/\D/g, ""))
+                        }
                         placeholder="98765 43210"
                         maxLength={10}
                         className="pl-10"
@@ -300,18 +466,26 @@ export default function LoginPage() {
                         onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                       />
                     </div>
-                     <p className="text-xs text-muted-foreground">We need your phone number for authentication. You will only be asked for this once.</p>
-                 </div>
-                 <Button variant="link" size="sm" onClick={resetLoginFlow} className="p-0 h-auto">
+                    <p className="text-xs text-muted-foreground">
+                      We need your phone number for authentication. You will
+                      only be asked for this once.
+                    </p>
+                  </div>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={resetLoginFlow}
+                    className="p-0 h-auto"
+                  >
                     Back to login
                   </Button>
-               </div>
-            )}
-            
-            {loginStep === 'otp' && (
-               <div className="space-y-4">
-                 <div className="space-y-2">
-                   <Label htmlFor="otp-input">Enter OTP</Label>
+                </div>
+              )}
+
+              {loginStep === "otp" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="otp-input">Enter OTP</Label>
                     <Input
                       id="otp-input"
                       type="text"
@@ -320,24 +494,113 @@ export default function LoginPage() {
                       placeholder="Enter 6-digit OTP"
                       maxLength={6}
                       disabled={isLoggingIn}
-                       onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                     />
-                 </div>
-                  <Button variant="link" size="sm" onClick={resetLoginFlow} className="p-0 h-auto">
+                  </div>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={resetLoginFlow}
+                    className="p-0 h-auto"
+                  >
                     Back to login
                   </Button>
-               </div>
-            )}
-            
-            <div id="recaptcha-container"></div>
+                </div>
+              )}
 
-            <Button
-              onClick={handleLogin}
-              className="w-full"
-              disabled={isLoggingIn || (role === "member" && loginStep === 'credentials' && (isDataLoading || !selectedUserId)) || isLocked}
+              <div id="recaptcha-container"></div>
+
+              <Button
+                onClick={handleLogin}
+                className="w-full"
+                disabled={
+                  isLoggingIn ||
+                  (role === "member" &&
+                    loginStep === "credentials" &&
+                    (isDataLoading || !selectedUserId)) ||
+                  isLocked
+                }
+              >
+                {getButtonText()}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="signup" className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-name">Full name</Label>
+                <Input
+                  id="signup-name"
+                  value={signupName}
+                  onChange={(e) => setSignupName(e.target.value)}
+                  placeholder="Your name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-pin">Create PIN (6 digits)</Label>
+                <Input
+                  id="signup-pin"
+                  value={signupPin}
+                  maxLength={6}
+                  onChange={(e) =>
+                    setSignupPin(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="123456"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-phone">Phone number (optional)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    +91
+                  </span>
+                  <Input
+                    id="signup-phone"
+                    value={signupPhone}
+                    maxLength={10}
+                    className="pl-10"
+                    onChange={(e) =>
+                      setSignupPhone(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="9876543210"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-type">Profile type</Label>
+                <Select value={signupType} onValueChange={setSignupType}>
+                  <SelectTrigger id="signup-type">
+                    <SelectValue placeholder="Select profile type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="family">Family</SelectItem>
+                    <SelectItem value="member">Member</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleMemberSignup}
+                disabled={isRegistering}
+                className="w-full"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                {isRegistering
+                  ? "Creating account..."
+                  : "Create Member Account"}
+              </Button>
+            </TabsContent>
+          </Tabs>
+
+          <div className="mt-6 border-t pt-4 text-center text-sm text-muted-foreground">
+            Need a brand-new tracker?{" "}
+            <Link
+              href="/setup"
+              className="text-primary underline underline-offset-4"
             >
-              {getButtonText()}
-            </Button>
+              Run setup wizard
+            </Link>
+            .
           </div>
         </CardContent>
       </Card>

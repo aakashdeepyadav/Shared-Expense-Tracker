@@ -39,6 +39,9 @@ const getSheetsClient = () => {
   return google.sheets({ version: 'v4', auth });
 };
 
+type SheetsClient = ReturnType<typeof getSheetsClient>;
+type SheetCell = string | number | boolean | null;
+
 function getSpreadsheetId() {
     const env = loadEnv();
     const SPREADSHEET_ID = env.GOOGLE_SHEET_ID;
@@ -52,11 +55,11 @@ function getSpreadsheetId() {
  * Creates a new sheet with the given title and returns its ID.
  * If a sheet with the same name already exists, it will be used.
  */
-async function ensureSheetExists(sheets: any, spreadsheetId: string, title: string): Promise<number | null | undefined> {
+async function ensureSheetExists(sheets: SheetsClient, spreadsheetId: string, title: string): Promise<number | null | undefined> {
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId,
   });
-  const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === title);
+  const sheet = spreadsheet.data.sheets?.find((s) => s.properties?.title === title);
 
   if (sheet) {
     return sheet.properties?.sheetId;
@@ -75,7 +78,7 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, title: stri
  * Writes data to a specific sheet (tab) in the Google Sheet.
  * It will clear the sheet before writing the new data.
  */
-async function writeToSheet(sheets: any, spreadsheetId: string, sheetTitle: string, headers: string[], data: any[][]) {
+async function writeToSheet(sheets: SheetsClient, spreadsheetId: string, sheetTitle: string, headers: string[], data: SheetCell[][]) {
   const sheetId = await ensureSheetExists(sheets, spreadsheetId, sheetTitle);
   if (sheetId === undefined || sheetId === null) {
     throw new Error(`Could not find or create sheet: ${sheetTitle}`);
@@ -108,7 +111,7 @@ async function writeToSheet(sheets: any, spreadsheetId: string, sheetTitle: stri
 /**
  * Appends data to a new, timestamped sheet.
  */
-async function appendToNewTimestampedSheet(sheets: any, spreadsheetId: string, baseTitle: string, headers: string[], data: any[][]) {
+async function appendToNewTimestampedSheet(sheets: SheetsClient, spreadsheetId: string, baseTitle: string, headers: string[], data: SheetCell[][]) {
     const date = new Date();
     const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     const sheetTitle = `${baseTitle} (${dateString})`;

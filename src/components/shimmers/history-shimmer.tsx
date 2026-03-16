@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,14 +12,16 @@ import {
 } from "@/components/ui/table";
 
 type HistoryShimmerProps = {
-    title: string;
-    description: string;
-}
+  title: string;
+  description: string;
+};
 
 export function HistoryShimmer({ title, description }: HistoryShimmerProps) {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <header className="mb-6">
+        <h1 className="sr-only">{title}</h1>
+        <p className="sr-only">{description}</p>
         <Skeleton className="h-8 w-48 mb-2" />
         <Skeleton className="h-4 w-full max-w-sm" />
       </header>
@@ -36,10 +37,10 @@ export function HistoryShimmer({ title, description }: HistoryShimmerProps) {
                   <Skeleton className="h-5 w-24" />
                 </TableHead>
                 <TableHead className="hidden md:table-cell">
-                   <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-24" />
                 </TableHead>
                 <TableHead className="text-right">
-                   <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-24" />
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -51,8 +52,8 @@ export function HistoryShimmer({ title, description }: HistoryShimmerProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <Skeleton className="h-5 w-20 hidden sm:block" />
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <Skeleton className="h-5 w-20 hidden sm:block" />
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">

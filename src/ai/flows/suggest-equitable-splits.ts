@@ -88,7 +88,7 @@ const suggestEquitableSplitsFlow = ai.defineFlow(
     try {
       const {output} = await prompt(input);
       return output!;
-    } catch (e) {
+    } catch {
       // If the prompt fails, default to an equal split.
       const equalSplit = input.amount / input.participants.length;
       const split: SuggestEquitableSplitsOutput = {};

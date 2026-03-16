@@ -1,43 +1,86 @@
-
 "use client";
 
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useToast } from '@/hooks/use-toast';
-import { generateReportAction } from '@/app/actions';
-import type { GenerateReportOutput } from '@/ai/flows/generate-report';
-import { Loader2, FileDown, BarChart2, Wallet, Users, Landmark, IndianRupee } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { Logo } from '@/components/icons/logo';
-import { 
+import { useToast } from "@/hooks/use-toast";
+import { generateReportAction } from "@/app/actions";
+import type { GenerateReportOutput } from "@/ai/flows/generate-report";
+import {
+  Loader2,
+  FileDown,
+  BarChart2,
+  Wallet,
+  Users,
+  Landmark,
+  IndianRupee,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { Logo } from "@/components/icons/logo";
+import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartConfig
-} from "@/components/ui/chart"
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, LabelList } from "recharts"
-import { formatCurrency } from '@/lib/utils';
-
+  ChartConfig,
+} from "@/components/ui/chart";
+import {
+  Bar,
+  BarChart,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  Cell,
+  LabelList,
+} from "recharts";
+import { formatCurrency } from "@/lib/utils";
+import { useAuth } from "@/context/auth-context";
+import { useRouter } from "next/navigation";
+import { DashboardShimmer } from "@/components/shimmers/dashboard-shimmer";
 
 const chartColors = [
-    "hsl(var(--chart-1))",
-    "hsl(var(--chart-2))",
-    "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))",
-    "hsl(var(--chart-5))",
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 export default function ReportsPage() {
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured, getToken } =
+    useAuth();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [reportData, setReportData] = useState<GenerateReportOutput | null>(null);
+  const [reportData, setReportData] = useState<GenerateReportOutput | null>(
+    null,
+  );
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isAuthLoading && !isAppConfigured) {
+      router.push("/setup");
+    } else if (!isAuthLoading && !currentUser) {
+      router.push("/login");
+    } else if (!isAuthLoading && currentUser && !isAdmin) {
+      router.push("/");
+    }
+  }, [currentUser, isAdmin, isAppConfigured, isAuthLoading, router]);
+
+  if (isAuthLoading || !currentUser || !isAdmin) {
+    return <DashboardShimmer />;
+  }
 
   const handleGenerateReport = async () => {
     setIsLoading(true);
     setReportData(null);
     try {
-      const result = await generateReportAction();
+      const token = await getToken();
+      const result = await generateReportAction(token);
       if (result) {
         setReportData(result);
         toast({
@@ -63,37 +106,41 @@ export default function ReportsPage() {
     window.print();
   };
 
-  const chartData = reportData?.memberContributions?.map((item, index) => ({
+  const chartData =
+    reportData?.memberContributions?.map((item, index) => ({
       ...item,
       fill: chartColors[index % chartColors.length],
-  })) || [];
+    })) || [];
 
-  const chartConfig = (chartData.reduce((acc, item) => {
+  const chartConfig = chartData.reduce((acc, item) => {
     acc[item.name] = {
       label: item.name,
       color: item.fill,
     };
     return acc;
-  }, {} as ChartConfig));
-
+  }, {} as ChartConfig);
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 @container">
-      <div className="flex flex-col @lg:flex-row @lg:items-center @lg:justify-between mb-6 print:hidden">
+    <div className="p-4 md:p-6 lg:p-8 @container animate-fade-up">
+      <div className="flex flex-col @lg:flex-row @lg:items-center @lg:justify-between gap-4 mb-6 print:hidden">
         <div>
-          <h1 className="text-2xl font-bold font-headline">Reports</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+            Reports
+          </h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Generate and view a detailed financial summary.
           </p>
         </div>
-        <div className="flex gap-2 mt-4 @lg:mt-0">
+        <div className="flex flex-wrap gap-2 mt-2 @lg:mt-0">
           <Button onClick={handleGenerateReport} disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating...
               </>
-            ) : "Generate Report"}
+            ) : (
+              "Generate Report"
+            )}
           </Button>
           {reportData && (
             <Button variant="outline" onClick={handlePrint}>
@@ -103,166 +150,188 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
-      
-      <div id="report-content" className="space-y-6">
+
+      <div id="report-content" className="space-y-6 stagger-children">
         {isLoading && (
-            <Card>
-                <CardContent className="flex flex-col items-center justify-center text-center p-10">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                    <p className="text-lg font-semibold">Analyzing your data...</p>
-                    <p className="text-muted-foreground">This may take a moment.</p>
-                </CardContent>
-            </Card>
+          <Card className="modern-surface border-0 animate-soft-pop">
+            <CardContent className="flex flex-col items-center justify-center text-center p-8 md:p-10">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <p className="text-lg font-semibold">Analyzing your data...</p>
+              <p className="text-muted-foreground">This may take a moment.</p>
+            </CardContent>
+          </Card>
         )}
-        
+
         {reportData && (
           <>
-            <div className='hidden print:block mb-8'>
-                <div className='flex items-center gap-4'>
-                    <Logo className="h-16 w-16" />
-                    <div>
-                    <h1 className='text-3xl font-bold m-0'>TiFresh</h1>
-                    <p className='text-muted-foreground m-0'>Financial Report</p>
-                    </div>
+            <div className="hidden print:block mb-8">
+              <div className="flex items-center gap-4">
+                <Logo className="h-16 w-16" />
+                <div>
+                  <h1 className="text-3xl font-bold m-0">TiFresh</h1>
+                  <p className="text-muted-foreground m-0">Financial Report</p>
                 </div>
+              </div>
             </div>
-          
+
             <div className="print:hidden">
-                <h1 className="text-2xl font-bold font-headline mb-2">Financial Report</h1>
-                <p className="text-muted-foreground max-w-2xl">{reportData.aiSummary}</p>
+              <h1 className="text-2xl font-bold font-headline mb-2">
+                Financial Report
+              </h1>
+              <p className="text-muted-foreground max-w-2xl">
+                {reportData.aiSummary}
+              </p>
             </div>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Overall Financial Health</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="flex items-start gap-4">
-                        <div className="bg-primary/10 p-3 rounded-lg">
-                           <Landmark className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-muted-foreground">Total Wallet Contributions</p>
-                            <p className="text-2xl font-bold">{formatCurrency(reportData.totalContributions)}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-start gap-4">
-                        <div className="bg-primary/10 p-3 rounded-lg">
-                           <IndianRupee className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-muted-foreground">Total Group Spending</p>
-                            <p className="text-2xl font-bold">{formatCurrency(reportData.totalExpenses)}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-start gap-4">
-                        <div className="bg-primary/10 p-3 rounded-lg">
-                           <Users className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-muted-foreground">Expense per Member</p>
-                            <p className="text-2xl font-bold">{formatCurrency(reportData.expensePerMember)}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-start gap-4">
-                        <div className="bg-primary/10 p-3 rounded-lg">
-                           <Wallet className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-muted-foreground">Final Wallet Balance</p>
-                            <p className="text-2xl font-bold">{formatCurrency(reportData.walletBalance)}</p>
-                        </div>
-                    </div>
-                </CardContent>
+
+            <Card className="modern-surface border-0">
+              <CardHeader>
+                <CardTitle>Overall Financial Health</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <Landmark className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">
+                      Total Wallet Contributions
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(reportData.totalContributions)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <IndianRupee className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">
+                      Total Group Spending
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(reportData.totalExpenses)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <Users className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Expense per Member</p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(reportData.expensePerMember)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <Wallet className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">
+                      Final Wallet Balance
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(reportData.walletBalance)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
             </Card>
 
-
-             {chartData.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <BarChart2 className="h-5 w-5" />
-                        Member Contributions
-                    </CardTitle>
-                    <CardDescription>
-                      Total financial input (wallet contributions + expenses paid) by each member.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pl-0">
-                    <ChartContainer
-                      config={chartConfig}
-                      className="w-full h-[250px] lg:h-[300px]"
-                    >
-                      <ResponsiveContainer width="100%" height="100%">
-                         <BarChart
-                            accessibilityLayer
-                            data={chartData}
-                            layout="vertical"
-                            margin={{ left: 10, right: 30 }}
-                        >
-                            <YAxis
-                                dataKey="name"
-                                type="category"
-                                tickLine={false}
-                                axisLine={false}
-                                tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
-                                tickMargin={10}
-                                width={80}
+            {chartData.length > 0 && (
+              <Card className="modern-surface border-0">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart2 className="h-5 w-5" />
+                    Member Contributions
+                  </CardTitle>
+                  <CardDescription>
+                    Total financial input (wallet contributions + expenses paid)
+                    by each member.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pl-0 pr-0 md:pr-6">
+                  <ChartContainer
+                    config={chartConfig}
+                    className="w-full h-[250px] lg:h-[300px]"
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        accessibilityLayer
+                        data={chartData}
+                        layout="vertical"
+                        margin={{ left: 10, right: 30 }}
+                      >
+                        <YAxis
+                          dataKey="name"
+                          type="category"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{
+                            fill: "hsl(var(--foreground))",
+                            fontSize: 12,
+                          }}
+                          tickMargin={10}
+                          width={80}
+                        />
+                        <XAxis dataKey="total" type="number" hide />
+                        <ChartTooltip
+                          cursor={false}
+                          content={
+                            <ChartTooltipContent
+                              formatter={(value) =>
+                                formatCurrency(value as number)
+                              }
+                              indicator="line"
                             />
-                            <XAxis dataKey="total" type="number" hide />
-                            <ChartTooltip
-                                cursor={false}
-                                content={<ChartTooltipContent 
-                                    formatter={(value) => formatCurrency(value as number)}
-                                    indicator="line"
-                                />}
-                            />
-                            <Bar dataKey="total" layout="vertical" radius={5}>
-                                {chartData.map((entry) => (
-                                    <Cell key={entry.name} fill={entry.fill} />
-                                ))}
-                                <LabelList
-                                    dataKey="total"
-                                    position="insideRight"
-                                    offset={8}
-                                    className="fill-primary-foreground font-semibold"
-                                    formatter={(value: number) => formatCurrency(value)}
-                                />
-                            </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                          }
+                        />
+                        <Bar dataKey="total" layout="vertical" radius={5}>
+                          {chartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                          <LabelList
+                            dataKey="total"
+                            position="insideRight"
+                            offset={8}
+                            className="fill-primary-foreground font-semibold"
+                            formatter={(value: number) => formatCurrency(value)}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
             )}
 
-
-            <Card className="print:shadow-none print:border-none">
-                <CardContent className="pt-6">
-                     <article className="prose prose-sm md:prose-base dark:prose-invert max-w-none">
-                      <ReactMarkdown>
-                        {reportData.report}
-                      </ReactMarkdown>
-                    </article>
-                </CardContent>
+            <Card className="modern-surface border-0 print:shadow-none print:border-none">
+              <CardContent className="pt-6">
+                <article className="prose prose-sm md:prose-base dark:prose-invert max-w-none prose-headings:tracking-tight prose-p:leading-relaxed">
+                  <ReactMarkdown>{reportData.report}</ReactMarkdown>
+                </article>
+              </CardContent>
             </Card>
           </>
         )}
 
         {!isLoading && !reportData && (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Financial Report</CardTitle>
-                    <CardDescription>
-                        Click 'Generate Report' to get started.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-center p-10 text-muted-foreground print:hidden">
-                    Your report will be displayed here once generated.
-                    </div>
-                </CardContent>
-            </Card>
+          <Card className="modern-surface border-0 animate-soft-pop">
+            <CardHeader>
+              <CardTitle>Financial Report</CardTitle>
+              <CardDescription>
+                Click Generate Report to get started.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center p-10 text-muted-foreground print:hidden">
+                Your report will be displayed here once generated.
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 
@@ -271,7 +340,8 @@ export default function ReportsPage() {
           body * {
             visibility: hidden;
           }
-          #report-content, #report-content * {
+          #report-content,
+          #report-content * {
             visibility: visible;
           }
           #report-content {
@@ -284,10 +354,12 @@ export default function ReportsPage() {
           .prose {
             font-size: 12px;
           }
-           .prose h1, .prose h2, .prose h3 {
-             margin-top: 1.2em;
-             margin-bottom: 0.5em;
-           }
+          .prose h1,
+          .prose h2,
+          .prose h3 {
+            margin-top: 1.2em;
+            margin-bottom: 0.5em;
+          }
         }
         .prose table {
           width: 100%;
@@ -295,7 +367,8 @@ export default function ReportsPage() {
           margin-top: 1em;
           margin-bottom: 1em;
         }
-        .prose th, .prose td {
+        .prose th,
+        .prose td {
           border: 1px solid hsl(var(--border));
           padding: 0.5em 1em;
         }
@@ -303,11 +376,11 @@ export default function ReportsPage() {
           background-color: hsl(var(--muted));
         }
         .prose thead th {
-            font-weight: 600;
+          font-weight: 600;
         }
         .prose a {
-            color: inherit;
-            text-decoration: none;
+          color: inherit;
+          text-decoration: none;
         }
       `}</style>
     </div>

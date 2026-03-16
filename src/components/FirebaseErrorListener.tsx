@@ -1,57 +1,66 @@
-
 "use client";
 
-import React, { useEffect } from 'react';
-import { errorEmitter } from '@/lib/error-emitter';
-import { FirestorePermissionError } from '@/lib/errors';
-import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { useEffect } from "react";
+import { errorEmitter } from "@/lib/error-emitter";
+import { FirestorePermissionError } from "@/lib/errors";
+import { auth } from "@/lib/firebase";
 
 const FirebaseErrorListener = () => {
-  const { toast } = useToast();
-
   useEffect(() => {
-    const handlePermissionError = async (error: FirestorePermissionError) => {
-      console.error("Caught a Firestore Permission Error:", error);
+    const handlePermissionError = (...args: unknown[]) => {
+      const maybeError = args[0];
+      if (!(maybeError instanceof FirestorePermissionError)) {
+        return;
+      }
 
-      const currentUser = auth.currentUser;
-      const idTokenResult = currentUser ? await currentUser.getIdTokenResult() : null;
+      void (async () => {
+        const currentUser = auth.currentUser;
+        const idTokenResult = currentUser
+          ? await currentUser.getIdTokenResult()
+          : null;
 
-      // Construct a developer-friendly error message
-      const contextualError = new Error(
-`FirestoreError: Missing or insufficient permissions: The following request was denied by Firestore Security Rules:
-${JSON.stringify({
-  auth: {
-    uid: currentUser?.uid || "Not Authenticated",
-    token: idTokenResult?.claims || "No Token",
-  },
-  method: error.context.operation,
-  path: `/databases/(default)/documents/${error.context.path}`,
-  request: {
-    resource: {
-      data: error.context.requestResourceData || "N/A"
-    }
-  }
-}, null, 2)}`
-      );
+        if (!currentUser) {
+          // Skip noisy console output for unauthenticated requests.
+          return;
+        }
 
-      // We throw the error here, which will be caught by Next.js's development error overlay.
-      // This provides a much better debugging experience than a simple console.log or toast.
-      // In a production build, this would be handled by a global error boundary.
-      throw contextualError;
+        const contextualDetails = {
+          auth: {
+            uid: currentUser?.uid || "Not Authenticated",
+            token: idTokenResult?.claims || "No Token",
+          },
+          method: maybeError.context.operation,
+          path: `/databases/(default)/documents/${maybeError.context.path}`,
+          request: {
+            resource: {
+              data: maybeError.context.requestResourceData || "N/A",
+            },
+          },
+        };
 
+        // Keep diagnostics in console, but avoid crashing the UI with a thrown error.
+        console.error(
+          `FirestoreError: Missing or insufficient permissions:\n${JSON.stringify(
+            contextualDetails,
+            null,
+            2,
+          )}`,
+        );
+
+        console.warn(
+          "Authenticated Firestore request denied. Check Security Rules for this path.",
+        );
+      })();
     };
 
-    errorEmitter.on('permission-error', handlePermissionError);
+    errorEmitter.on("permission-error", handlePermissionError);
 
     return () => {
-      errorEmitter.off('permission-error', handlePermissionError);
+      errorEmitter.off("permission-error", handlePermissionError);
     };
-  }, [toast]);
+  }, []);
 
   return null; // This component does not render anything
 };
 
 export default FirebaseErrorListener;
-
-    

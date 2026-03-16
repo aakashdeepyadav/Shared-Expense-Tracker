@@ -6,6 +6,42 @@ To get started, take a look at src/app/page.tsx.
 
 ---
 
+## Onboarding-First Flow (New)
+
+This project now supports a guided setup wizard for creating an expense tracker instance.
+
+### What the wizard captures
+
+1. Group name and group image.
+2. Number of members and member profile type (e.g. student).
+3. Per-member details (name, PIN, phone, avatar).
+4. Admin selection from members and admin password.
+5. Firebase project config JSON upload/paste (stored as project metadata).
+6. Theme preference and model API key for report generation.
+
+### Runtime flow
+
+1. If setup is not complete, users are sent to `/setup`.
+2. Once setup is complete, users can:
+   - Login as member with PIN + OTP.
+   - Login as admin with admin password.
+   - Signup as new member from the login page.
+3. Admin has management access. Members have read/report oriented flow.
+
+### Local run
+
+```bash
+npm install
+npm run typecheck
+npm run dev
+```
+
+Open `http://localhost:9002`.
+
+If this is a fresh project, run setup at `http://localhost:9002/setup`.
+
+---
+
 ## Google Sheets Integration Setup
 
 To enable the data archiving and daily sync feature with Google Sheets, you need to perform the following setup steps in Google Cloud Platform and your project's environment variables.
@@ -63,24 +99,24 @@ You need to add the contents of the downloaded JSON key file and your Google She
     SYNC_SECRET="<generate-a-strong-random-secret-string>"
     ```
 
-    *   Replace the placeholder values with your actual credentials.
-    *   For `SYNC_SECRET`, generate a strong, random string. You will use this to secure your daily sync endpoint.
+    - Replace the placeholder values with your actual credentials.
+    - For `SYNC_SECRET`, generate a strong, random string. You will use this to secure your daily sync endpoint.
 
 ### 4. Set up Daily Sync with Cloud Scheduler
 
 1.  Go to the [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler) in the Google Cloud Console.
 2.  Click **CREATE JOB**.
 3.  **Define the schedule:**
-    *   **Name:** `sync-data-to-sheets`
-    *   **Region:** Select a region (e.g., `us-central1`).
-    *   **Frequency (cron):** `0 22 * * *` (This means 10:00 PM every day).
-    *   **Timezone:** Select your timezone (e.g., `India Standard Time (IST)`).
+    - **Name:** `sync-data-to-sheets`
+    - **Region:** Select a region (e.g., `us-central1`).
+    - **Frequency (cron):** `0 22 * * *` (This means 10:00 PM every day).
+    - **Timezone:** Select your timezone (e.g., `India Standard Time (IST)`).
 4.  **Configure the execution:**
-    *   **Target type:** `HTTP`
-    *   **URL:** This will be your deployed application's URL followed by `/api/sync-sheets`. For App Hosting, you can find your URL in the Firebase console.
-    *   **HTTP method:** `POST`
-    *   **Auth header:** `OIDC token`
-    *   **Service account:** Select the same service account you created earlier.
+    - **Target type:** `HTTP`
+    - **URL:** This will be your deployed application's URL followed by `/api/sync-sheets`. For App Hosting, you can find your URL in the Firebase console.
+    - **HTTP method:** `POST`
+    - **Auth header:** `OIDC token`
+    - **Service account:** Select the same service account you created earlier.
 5.  Click **CREATE**.
 
 Your setup is now complete. The "Start New Month" feature will archive data to your sheet, and the sync will run automatically every night at 10 PM.

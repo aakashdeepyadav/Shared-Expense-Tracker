@@ -1,4 +1,3 @@
-
 "use client";
 
 import { z } from "zod";
@@ -60,8 +59,11 @@ type ExpenseDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddExpense: (
-    expense: Omit<Expense, "id" | "participants"> & { participants: string[] }
-  ) => void;
+    expense: Omit<Expense, "id" | "participants" | "date"> & {
+      participants: string[];
+      date: Date;
+    },
+  ) => void | Promise<void>;
   users: User[];
 };
 
@@ -83,7 +85,7 @@ export function ExpenseDialog({
       tags: [],
       participants: users.map((u) => u.id),
     }),
-    [users]
+    [users],
   );
 
   const form = useForm<ExpenseFormValues>({
@@ -106,33 +108,47 @@ export function ExpenseDialog({
       : [...currentTags, tag];
     form.setValue("tags", newTags, { shouldValidate: true });
   };
-  
+
   const handleAddCustomTag = () => {
     const tagToAdd = customTag.trim().toLowerCase();
     if (tagToAdd && !selectedTags.includes(tagToAdd)) {
-        form.setValue("tags", [...selectedTags, tagToAdd], { shouldValidate: true });
-        setCustomTag("");
+      form.setValue("tags", [...selectedTags, tagToAdd], {
+        shouldValidate: true,
+      });
+      setCustomTag("");
     }
   };
 
   async function onSubmit(data: ExpenseFormValues) {
-    const description = data.tags.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(' + ');
+    const description = data.tags
+      .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+      .join(" + ");
 
     const expenseData = {
       ...data,
       description,
     };
-    
-    onAddExpense(expenseData);
 
-    toast({
-      title: "Expense Added!",
-      description: `"${description}" for ${formatCurrency(
-        data.amount
-      )} has been recorded.`,
-    });
-    onOpenChange(false);
-    form.reset(defaultValues);
+    try {
+      await onAddExpense(expenseData);
+      toast({
+        title: "Expense Added!",
+        description: `"${description}" for ${formatCurrency(
+          data.amount,
+        )} has been recorded.`,
+      });
+      onOpenChange(false);
+      form.reset(defaultValues);
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Could not add expense",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Please check your permissions and try again.",
+      });
+    }
   }
 
   return (
@@ -142,12 +158,13 @@ export function ExpenseDialog({
         <DialogHeader>
           <DialogTitle>Add Expense</DialogTitle>
           <DialogDescription>
-            Select tags to describe the expense, set the amount, and choose participants. The description will be created automatically.
+            Select tags to describe the expense, set the amount, and choose
+            participants. The description will be created automatically.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-             {/* Tags */}
+            {/* Tags */}
             <FormField
               control={form.control}
               name="tags"
@@ -159,7 +176,9 @@ export function ExpenseDialog({
                       <Button
                         key={tag}
                         type="button"
-                        variant={selectedTags.includes(tag) ? "default" : "outline"}
+                        variant={
+                          selectedTags.includes(tag) ? "default" : "outline"
+                        }
                         size="sm"
                         onClick={() => toggleTag(tag)}
                         className="capitalize"
@@ -168,22 +187,28 @@ export function ExpenseDialog({
                       </Button>
                     ))}
                   </div>
-                   <div className="flex items-center gap-2 pt-2">
-                      <Input
-                        placeholder="Add a custom tag..."
-                        value={customTag}
-                        onChange={(e) => setCustomTag(e.target.value)}
-                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddCustomTag();
-                          }
-                        }}
-                      />
-                      <Button type="button" variant="outline" size="icon" onClick={handleAddCustomTag} aria-label="Add custom tag">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <Input
+                      placeholder="Add a custom tag..."
+                      value={customTag}
+                      onChange={(e) => setCustomTag(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCustomTag();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleAddCustomTag}
+                      aria-label="Add custom tag"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -232,7 +257,9 @@ export function ExpenseDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="tifresh">TiFresh (Wallet)</SelectItem>
+                        <SelectItem value="tifresh">
+                          TiFresh (Wallet)
+                        </SelectItem>
                         {users.map((user) => (
                           <SelectItem key={user.id} value={user.id}>
                             {user.name}
@@ -260,7 +287,7 @@ export function ExpenseDialog({
                           variant="outline"
                           className={cn(
                             "pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
+                            !field.value && "text-muted-foreground",
                           )}
                         >
                           {field.value ? (
@@ -285,7 +312,7 @@ export function ExpenseDialog({
                 </FormItem>
               )}
             />
-            
+
             {/* Participants */}
             <FormField
               control={form.control}
@@ -314,8 +341,8 @@ export function ExpenseDialog({
                                       ])
                                     : field.onChange(
                                         field.value?.filter(
-                                          (value) => value !== user.id
-                                        )
+                                          (value) => value !== user.id,
+                                        ),
                                       );
                                 }}
                               />

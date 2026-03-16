@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from "react";
@@ -11,14 +10,27 @@ import { useAuth } from "@/context/auth-context";
 import { usePathname } from "next/navigation";
 import { Plus, Wallet } from "lucide-react";
 import { ThemeSwitcher } from "./theme-switcher";
+import { Logo } from "./icons/logo";
 
 type PageHeaderProps = {
-  onAddExpense?: (expense: Omit<Expense, 'id' | 'participants'> & { participants: string[] }) => void;
-  onAddContribution?: (contribution: { contributorId: string; amount: number }) => void;
+  onAddExpense?: (
+    expense: Omit<Expense, "id" | "participants" | "date"> & {
+      participants: string[];
+      date: Date;
+    },
+  ) => void | Promise<void>;
+  onAddContribution?: (contribution: {
+    contributorId: string;
+    amount: number;
+  }) => void;
   users?: User[];
-}
+};
 
-export function PageHeader({ onAddExpense, onAddContribution, users = [] }: PageHeaderProps) {
+export function PageHeader({
+  onAddExpense,
+  onAddContribution,
+  users = [],
+}: PageHeaderProps) {
   const { isAdmin } = useAuth();
   const pathname = usePathname();
   const [isContributionOpen, setIsContributionOpen] = React.useState(false);
@@ -28,8 +40,10 @@ export function PageHeader({ onAddExpense, onAddContribution, users = [] }: Page
     if (pathname === "/") return "Dashboard";
     if (pathname.startsWith("/settings")) return "Settings";
     if (pathname.startsWith("/reports")) return "Reports";
+    if (pathname.startsWith("/audit-logs")) return "Audit Logs";
     if (pathname.startsWith("/expense-history")) return "Expense History";
-    if (pathname.startsWith("/contribution-history")) return "Contribution History";
+    if (pathname.startsWith("/contribution-history"))
+      return "Contribution History";
     return "Dashboard";
   }, [pathname]);
 
@@ -37,11 +51,19 @@ export function PageHeader({ onAddExpense, onAddContribution, users = [] }: Page
   const canAddContribution = !!onAddContribution;
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
+    <header className="sticky top-0 z-10 mx-2 mt-2 flex h-16 shrink-0 items-center gap-3 rounded-2xl border border-white/40 bg-white/70 px-3 shadow-sm backdrop-blur-md animate-fade-up md:mx-4 md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/60">
       <div className="md:hidden">
         <SidebarTrigger />
       </div>
-      <h1 className="flex-1 text-lg font-semibold md:text-xl">{pageTitle}</h1>
+      <div className="hidden sm:flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
+        <Logo className="h-4 w-4" />
+        <span className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground">
+          TiFresh
+        </span>
+      </div>
+      <h1 className="flex-1 text-base font-semibold tracking-tight md:text-xl">
+        {pageTitle}
+      </h1>
       <div className="flex items-center gap-2">
         {isAdmin && pathname === "/" && (
           <div className="flex items-center gap-2">
@@ -52,21 +74,30 @@ export function PageHeader({ onAddExpense, onAddContribution, users = [] }: Page
                 onAddContribution={onAddContribution!}
                 users={users}
               >
-                <Button size="sm" onClick={() => setIsContributionOpen(true)}>
-                   <Wallet className="sm:mr-2" />
+                <Button
+                  size="sm"
+                  className="shadow-sm transition-transform hover:-translate-y-0.5"
+                  onClick={() => setIsContributionOpen(true)}
+                >
+                  <Wallet className="sm:mr-2" />
                   <span className="hidden sm:inline">Add Contribution</span>
                 </Button>
               </ContributionDialog>
             )}
-            
+
             {canAddExpense && (
-              <ExpenseDialog 
-                open={isExpenseOpen} 
-                onOpenChange={setIsExpenseOpen} 
+              <ExpenseDialog
+                open={isExpenseOpen}
+                onOpenChange={setIsExpenseOpen}
                 onAddExpense={onAddExpense!}
                 users={users}
               >
-                <Button variant="outline" size="sm" onClick={() => setIsExpenseOpen(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-white/50 bg-white/70 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-white dark:border-white/15 dark:bg-slate-800/60"
+                  onClick={() => setIsExpenseOpen(true)}
+                >
                   <Plus className="sm:mr-2" />
                   <span className="hidden sm:inline">Add Expense</span>
                 </Button>
@@ -74,7 +105,7 @@ export function PageHeader({ onAddExpense, onAddContribution, users = [] }: Page
             )}
           </div>
         )}
-         <ThemeSwitcher />
+        <ThemeSwitcher />
       </div>
     </header>
   );

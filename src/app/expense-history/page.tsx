@@ -1,12 +1,7 @@
-
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -29,32 +24,33 @@ import { HistoryShimmer } from "@/components/shimmers/history-shimmer";
 const PAGE_SIZE = 20;
 
 export default function ExpenseHistoryPage() {
-  const { currentUser, isAuthLoading } = useAuth();
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [lastExpense, setLastExpense] = useState<Expense | undefined>(undefined);
+  const [lastExpense, setLastExpense] = useState<Expense | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     if (isAuthLoading) return;
-    if (!currentUser) {
+    if (!isAppConfigured) {
+      router.push("/setup");
+    } else if (!currentUser) {
       router.push("/login");
     } else {
       setIsLoading(true);
-      const unsubExpenses = subscribeToExpenses(
-        PAGE_SIZE,
-        (newExpenses) => {
-          setExpenses(newExpenses);
-          setHasMore(newExpenses.length === PAGE_SIZE);
-           if (newExpenses.length > 0) {
-            setLastExpense(newExpenses[newExpenses.length - 1]);
-          }
-          setIsLoading(false);
+      const unsubExpenses = subscribeToExpenses(PAGE_SIZE, (newExpenses) => {
+        setExpenses(newExpenses);
+        setHasMore(newExpenses.length === PAGE_SIZE);
+        if (newExpenses.length > 0) {
+          setLastExpense(newExpenses[newExpenses.length - 1]);
         }
-      );
+        setIsLoading(false);
+      });
 
       const unsubUsers = subscribeToUsers((newUsers) => {
         setUsers(newUsers);
@@ -65,41 +61,69 @@ export default function ExpenseHistoryPage() {
         unsubUsers();
       };
     }
-  }, [currentUser, isAuthLoading, router]);
+  }, [currentUser, isAppConfigured, isAuthLoading, router]);
 
   const handleLoadMore = () => {
     if (!hasMore || isLoadingMore || !lastExpense) return;
     setIsLoadingMore(true);
-    
-    const unsub = subscribeToExpenses(PAGE_SIZE, (newExpenses) => {
+
+    const unsub = subscribeToExpenses(
+      PAGE_SIZE,
+      (newExpenses) => {
         setExpenses((prev) => [...prev, ...newExpenses]);
         setHasMore(newExpenses.length === PAGE_SIZE);
         if (newExpenses.length > 0) {
-            setLastExpense(newExpenses[newExpenses.length - 1]);
+          setLastExpense(newExpenses[newExpenses.length - 1]);
         }
         setIsLoadingMore(false);
-        unsub(); 
-    }, lastExpense);
+        unsub();
+      },
+      lastExpense,
+    );
   };
 
   const userMap = new Map(users.map((user) => [user.id, user]));
-  userMap.set("tifresh", { id: "tifresh", name: "TiFresh", avatarUrl: "https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png", pin: "" });
+  userMap.set("tifresh", {
+    id: "tifresh",
+    name: "TiFresh",
+    avatarUrl:
+      "https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png",
+    pin: "",
+  });
+
+  const visibleExpenses =
+    isAdmin || !currentUser
+      ? expenses
+      : expenses.filter(
+          (expense) =>
+            expense.payerId === currentUser.id ||
+            expense.participants.some(
+              (participant) => participant.userId === currentUser.id,
+            ),
+        );
 
   if (isLoading) {
-    return <HistoryShimmer title="Expense History" description="A list of all recorded group expenses." />;
+    return (
+      <HistoryShimmer
+        title="Expense History"
+        description="A list of all recorded group expenses."
+      />
+    );
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-up">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold font-headline">Expense History</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+          Expense History
+        </h1>
+        <p className="text-sm md:text-base text-muted-foreground">
           Showing all recorded expenses.
         </p>
       </header>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
+      <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[620px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Description</TableHead>
@@ -109,17 +133,24 @@ export default function ExpenseHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses.length > 0 ? (
-                expenses.map((expense) => {
+              {visibleExpenses.length > 0 ? (
+                visibleExpenses.map((expense) => {
                   const payer = userMap.get(expense.payerId);
                   return (
                     <TableRow key={expense.id}>
                       <TableCell>
                         <div className="font-medium">{expense.description}</div>
                         <div className="text-sm text-muted-foreground sm:hidden flex flex-wrap gap-1 mt-1">
-                          {expense.tags && expense.tags.map(tag => (
-                              <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
-                          ))}
+                          {expense.tags &&
+                            expense.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="outline"
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -137,8 +168,15 @@ export default function ExpenseHistoryPage() {
                           <div className="hidden sm:flex flex-col gap-1.5">
                             <span>{payer?.name}</span>
                             <div className="text-sm text-muted-foreground flex flex-wrap gap-1">
-                                {expense.tags && expense.tags.map(tag => (
-                                  <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                              {expense.tags &&
+                                expense.tags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
+                                    {tag}
+                                  </Badge>
                                 ))}
                             </div>
                           </div>
@@ -159,19 +197,18 @@ export default function ExpenseHistoryPage() {
                     colSpan={4}
                     className="text-center text-muted-foreground py-8"
                   >
-                    No expenses found.
+                    {isAdmin
+                      ? "No expenses found."
+                      : "No personal expenses found."}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
-        {hasMore && (
+        {isAdmin && hasMore && (
           <CardFooter className="pt-6 justify-center">
-            <Button
-              onClick={handleLoadMore}
-              disabled={isLoadingMore}
-            >
+            <Button onClick={handleLoadMore} disabled={isLoadingMore}>
               {isLoadingMore ? "Loading..." : "Load More"}
             </Button>
           </CardFooter>

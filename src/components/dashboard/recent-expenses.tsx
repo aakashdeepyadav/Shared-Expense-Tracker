@@ -1,4 +1,3 @@
-
 import {
   Table,
   TableBody,
@@ -16,16 +15,21 @@ import { format } from "date-fns";
 type RecentExpensesProps = {
   expenses: Expense[];
   users: User[];
-}
+};
 
 export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
   const userMap = new Map(users.map((user) => [user.id, user]));
-  userMap.set("tifresh", { id: "tifresh", name: "TiFresh", avatarUrl: "https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png" });
-
+  userMap.set("tifresh", {
+    id: "tifresh",
+    name: "TiFresh",
+    avatarUrl:
+      "https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png",
+    pin: "",
+  });
 
   return (
-    <div className="w-full">
-      <Table>
+    <div className="w-full overflow-x-auto">
+      <Table className="min-w-[620px]">
         <TableHeader>
           <TableRow>
             <TableHead>Description</TableHead>
@@ -35,43 +39,75 @@ export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {expenses.slice(0, 5).map((expense) => {
-            const payer = userMap.get(expense.payerId);
-            return (
-              <TableRow key={expense.id}>
-                <TableCell>
-                  <div className="font-medium">{expense.description}</div>
-                  <div className="text-sm text-muted-foreground md:hidden flex flex-wrap gap-1 mt-1">
-                     {expense.tags && expense.tags.map(tag => (
-                        <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
-                      ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={payer?.avatarUrl} alt={payer?.name} data-ai-hint="person portrait" />
-                      <AvatarFallback>{payer?.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="hidden sm:flex flex-col gap-1.5">
+          {expenses.length > 0 ? (
+            expenses.slice(0, 5).map((expense) => {
+              const payer = userMap.get(expense.payerId);
+              return (
+                <TableRow
+                  key={expense.id}
+                  className="hover:bg-muted/35 transition-colors"
+                >
+                  <TableCell>
+                    <div className="font-medium">{expense.description}</div>
+                    <div className="text-sm text-muted-foreground md:hidden flex flex-wrap gap-1 mt-1">
+                      {expense.tags &&
+                        expense.tags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8 ring-1 ring-border/60">
+                        <AvatarImage
+                          src={payer?.avatarUrl}
+                          alt={payer?.name}
+                          data-ai-hint="person portrait"
+                        />
+                        <AvatarFallback>{payer?.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="hidden sm:flex flex-col gap-1.5">
                         <span>{payer?.name}</span>
                         <div className="hidden text-sm text-muted-foreground md:flex flex-wrap gap-1">
-                            {expense.tags && expense.tags.map(tag => (
-                              <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                          {expense.tags &&
+                            expense.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="outline"
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
                             ))}
                         </div>
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  {format(new Date(expense.date), "dd/MM/yyyy")}
-                </TableCell>
-                <TableCell className="text-right">
-                  {formatCurrency(expense.amount)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">
+                    {format(new Date(expense.date), "dd/MM/yyyy")}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatCurrency(expense.amount)}
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell
+                colSpan={4}
+                className="py-8 text-center text-muted-foreground"
+              >
+                No expenses available yet.
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </div>

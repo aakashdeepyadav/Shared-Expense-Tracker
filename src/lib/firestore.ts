@@ -15,14 +15,245 @@ import {
   onSnapshot,
   setDoc,
   startAfter,
-  QueryDocumentSnapshot,
-  deleteDoc,
   arrayUnion,
 } from 'firebase/firestore';
-import type { User, Expense, Contribution, ChatMessage } from './types';
+import type {
+  User,
+  Expense,
+  Contribution,
+  ChatMessage,
+  AuditLogEntry,
+  AppConfig,
+  TrackerSetupPayload,
+  MemberSignupInput,
+} from './types';
 import { users as mockUsers, adminPassword as mockAdminPassword } from './data';
 import { FirestorePermissionError } from './errors';
 import { errorEmitter } from './error-emitter';
+
+const DEFAULT_AVATAR = 'https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png';
+
+function sanitizeMemberId(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || `member-${Date.now().toString(36)}`;
+}
+
+function normalizeIndianPhoneNumber(phoneNumber?: string): string | undefined {
+  if (!phoneNumber) return undefined;
+  const onlyDigits = phoneNumber.replace(/\D/g, '');
+  if (onlyDigits.length === 10) {
+    return `+91${onlyDigits}`;
+  }
+  if (phoneNumber.startsWith('+')) {
+    return phoneNumber;
+  }
+  return undefined;
+}
+
+export async function addAdminAuditLog(entry: {
+  action: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const auditCol = collection(db, 'auditLogs');
+  const dataToSave = {
+    actorId: 'admin',
+    action: entry.action,
+    metadata: entry.metadata || null,
+    timestamp: Timestamp.now(),
+  };
+
+  try {
+    await addDoc(auditCol, dataToSave);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: auditCol.path,
+      operation: 'create',
+      requestResourceData: {
+        actorId: 'admin',
+        action: entry.action,
+      },
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function getAppConfig(): Promise<AppConfig | null> {
+  const configDocRef = doc(db, 'config', 'app');
+  try {
+    const configDoc = await getDoc(configDocRef);
+    if (!configDoc.exists()) {
+      return null;
+    }
+    return configDoc.data() as AppConfig;
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: configDocRef.path,
+      operation: 'get',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function isAppInitialized(): Promise<boolean> {
+  const appConfig = await getAppConfig();
+  return !!appConfig?.initialized;
+}
+
+export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<void> {
+  const appConfigRef = doc(db, 'config', 'app');
+  const adminConfigRef = doc(db, 'config', 'admin');
+
+  const existingConfig = await getDoc(appConfigRef);
+  if (existingConfig.exists() && existingConfig.data()?.initialized) {
+    throw new Error('Tracker is already initialized for this project.');
+  }
+
+  if (!payload.groupName.trim()) {
+    throw new Error('Group name is required.');
+  }
+  if (!payload.members.length) {
+    throw new Error('At least one member is required.');
+  }
+  if (payload.adminIndex < 0 || payload.adminIndex >= payload.members.length) {
+    throw new Error('Please select a valid admin member.');
+  }
+
+  const normalizedMembers = payload.members.map((member) => ({
+    ...member,
+    name: member.name.trim(),
+    pin: member.pin.trim(),
+    phoneNumber: normalizeIndianPhoneNumber(member.phoneNumber),
+    avatarUrl: member.avatarUrl || DEFAULT_AVATAR,
+  }));
+
+  normalizedMembers.forEach((member, index) => {
+    if (!member.name) {
+      throw new Error(`Member ${index + 1} name is required.`);
+    }
+    if (!/^\d{6}$/.test(member.pin)) {
+      throw new Error(`Member ${index + 1} PIN must be exactly 6 digits.`);
+    }
+  });
+
+  if (payload.adminPassword.trim().length < 8) {
+    throw new Error('Admin password must be at least 8 characters.');
+  }
+
+  const batch = writeBatch(db);
+  const usedIds = new Set<string>();
+
+  normalizedMembers.forEach((member, index) => {
+    const baseId = sanitizeMemberId(member.name);
+    let nextId = baseId;
+    let suffix = 2;
+    while (usedIds.has(nextId)) {
+      nextId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(nextId);
+
+    if (index === payload.adminIndex) {
+      return;
+    }
+
+    const userDocRef = doc(db, 'users', nextId);
+    batch.set(userDocRef, {
+      name: member.name,
+      avatarUrl: member.avatarUrl,
+      pin: member.pin,
+      phoneNumber: member.phoneNumber || null,
+      memberType: member.memberType || payload.memberTypeLabel || 'member',
+    });
+  });
+
+  const adminMember = normalizedMembers[payload.adminIndex];
+  batch.set(adminConfigRef, {
+    password: payload.adminPassword,
+    name: adminMember.name,
+    avatarUrl: adminMember.avatarUrl,
+    phoneNumber: adminMember.phoneNumber || null,
+    memberType: adminMember.memberType || payload.memberTypeLabel || 'member',
+  });
+
+  const nowIso = new Date().toISOString();
+  batch.set(appConfigRef, {
+    initialized: true,
+    groupName: payload.groupName.trim(),
+    groupImageUrl: payload.groupImageUrl || null,
+    memberTypeLabel: payload.memberTypeLabel || 'member',
+    adminName: adminMember.name,
+    adminAvatarUrl: adminMember.avatarUrl,
+    themePreference: payload.themePreference,
+    modelApiKey: payload.modelApiKey || null,
+    firebaseProjectConfig: payload.firebaseProjectConfig || null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: 'config/app + config/admin + users',
+      operation: 'create',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function createMemberFromSignup(input: MemberSignupInput): Promise<User> {
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error('Name is required.');
+  }
+  if (!/^\d{6}$/.test(input.pin.trim())) {
+    throw new Error('PIN must be exactly 6 digits.');
+  }
+
+  const existingUsers = await getAllUsers();
+  const duplicateName = existingUsers.some((u) => u.name.toLowerCase() === name.toLowerCase());
+  if (duplicateName) {
+    throw new Error('A member with this name already exists.');
+  }
+
+  const baseId = sanitizeMemberId(name);
+  let memberId = baseId;
+  let suffix = 2;
+  const usedIds = new Set(existingUsers.map((u) => u.id));
+  while (usedIds.has(memberId)) {
+    memberId = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  const userRecord: Omit<User, 'id'> = {
+    name,
+    avatarUrl: input.avatarUrl || DEFAULT_AVATAR,
+    pin: input.pin.trim(),
+    phoneNumber: normalizeIndianPhoneNumber(input.phoneNumber),
+    memberType: input.memberType || 'member',
+  };
+
+  const userDocRef = doc(db, 'users', memberId);
+  try {
+    await setDoc(userDocRef, userRecord);
+    return { id: memberId, ...userRecord };
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: userDocRef.path,
+      operation: 'create',
+      requestResourceData: { ...userRecord, pin: 'REDACTED' },
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
 
 // --- User Functions ---
 
@@ -34,7 +265,7 @@ export function subscribeToUsers(callback: (users: User[]) => void): () => void 
       .map(doc => ({ id: doc.id, ...doc.data() } as User))
       .filter(user => user.id !== 'admin'); // Don't include admin as a regular user
     callback(userList);
-  }, (error) => {
+  }, () => {
     const permissionError = new FirestorePermissionError({
       path: usersCol.path,
       operation: 'list',
@@ -66,8 +297,21 @@ export async function getUser(id: string): Promise<User | null> {
     const userDocRef = doc(db, 'users', id);
     try {
         if (id === 'admin') {
+            const configDocRef = doc(db, 'config', 'admin');
+            const configDoc = await getDoc(configDocRef);
+            if (configDoc.exists()) {
+              const data = configDoc.data();
+              return {
+                id: 'admin',
+                name: data.name || 'Admin',
+                avatarUrl: data.avatarUrl || DEFAULT_AVATAR,
+                pin: data.password || '',
+                phoneNumber: data.phoneNumber || undefined,
+                memberType: data.memberType || 'admin',
+              };
+            }
             const password = await getAdminPassword();
-            return { id: 'admin', name: 'Admin', avatarUrl: 'https://raw.githubusercontent.com/skyworld-play/tifresh-app/refs/heads/main/tifresh.png', pin: password || '' };
+            return { id: 'admin', name: 'Admin', avatarUrl: DEFAULT_AVATAR, pin: password || '' };
         }
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
@@ -87,38 +331,47 @@ export async function getUser(id: string): Promise<User | null> {
 export async function updateUserCredential(userId: string, newCredential: string, isAdmin: boolean): Promise<void> {
     if (isAdmin) {
         const configDocRef = doc(db, 'config', 'admin');
-        updateDoc(configDocRef, { password: newCredential }).catch(async () => {
+    try {
+      await updateDoc(configDocRef, { password: newCredential });
+    } catch (error) {
             const permissionError = new FirestorePermissionError({
               path: configDocRef.path,
               operation: 'update',
               requestResourceData: { password: 'REDACTED' },
             });
             errorEmitter.emit('permission-error', permissionError);
-        });
+      throw error;
+    }
     } else {
         const userDocRef = doc(db, 'users', userId);
-        updateDoc(userDocRef, { pin: newCredential }).catch(async () => {
+    try {
+      await updateDoc(userDocRef, { pin: newCredential });
+    } catch (error) {
             const permissionError = new FirestorePermissionError({
               path: userDocRef.path,
               operation: 'update',
               requestResourceData: { pin: 'REDACTED' },
             });
             errorEmitter.emit('permission-error', permissionError);
-        });
+      throw error;
+    }
     }
 }
 
 export async function updateUserPhoneNumber(userId: string, phoneNumber: string): Promise<void> {
     if (!userId) throw new Error("User ID is required.");
     const userDocRef = doc(db, 'users', userId);
-    updateDoc(userDocRef, { phoneNumber: phoneNumber }).catch(async () => {
+  try {
+    await updateDoc(userDocRef, { phoneNumber: phoneNumber });
+  } catch (error) {
         const permissionError = new FirestorePermissionError({
             path: userDocRef.path,
             operation: 'update',
             requestResourceData: { phoneNumber },
         });
         errorEmitter.emit('permission-error', permissionError);
-    });
+    throw error;
+  }
 }
 
 // --- Admin Password Functions ---
@@ -139,28 +392,6 @@ export async function getAdminPassword(): Promise<string | null> {
     throw error;
   }
 }
-
-async function getDocSnapshot(docId: string, collectionName: string): Promise<QueryDocumentSnapshot | undefined> {
-  const docRef = doc(db, collectionName, docId);
-  try {
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-          // This snapshot can be used in startAfter, but it's not the exact same object
-          // from a query. For robust pagination, it's better to pass the full object from the query result.
-          // However, for simplicity here, we re-fetch.
-          return docSnap as QueryDocumentSnapshot;
-      }
-  } catch(error) {
-    // This is an internal helper, but we can still wire it up.
-     const permissionError = new FirestorePermissionError({
-        path: docRef.path,
-        operation: 'get',
-    });
-    errorEmitter.emit('permission-error', permissionError);
-  }
-  return undefined;
-}
-
 
 // --- Expense Functions ---
 export function subscribeToExpenses(
@@ -185,7 +416,7 @@ export function subscribeToExpenses(
       } as Expense;
     });
     callback(expenseList);
-  }, (error) => {
+  }, () => {
     const permissionError = new FirestorePermissionError({
         path: expensesCol.path,
         operation: 'list',
@@ -204,14 +435,17 @@ export async function addExpense(expenseData: Omit<Expense, 'id'| 'date'> & { da
       ...expenseData,
       date: Timestamp.fromDate(expenseData.date)
   };
-  addDoc(expenseCol, dataToSave).catch(async () => {
+  try {
+    await addDoc(expenseCol, dataToSave);
+  } catch (error) {
       const permissionError = new FirestorePermissionError({
         path: expenseCol.path,
         operation: 'create',
         requestResourceData: dataToSave,
       });
       errorEmitter.emit('permission-error', permissionError);
-  });
+      throw error;
+  }
 }
 
 
@@ -238,7 +472,7 @@ export function subscribeToContributions(
       } as Contribution;
     });
     callback(contributionList);
-  }, (error) => {
+  }, () => {
     const permissionError = new FirestorePermissionError({
       path: contributionsCol.path,
       operation: 'list',
@@ -257,14 +491,17 @@ export async function addContribution(contributionData: Omit<Contribution, 'id' 
         ...contributionData,
         date: Timestamp.fromDate(contributionData.date)
     };
-    addDoc(contributionCol, dataToSave).catch(async () => {
+  try {
+    await addDoc(contributionCol, dataToSave);
+  } catch (error) {
         const permissionError = new FirestorePermissionError({
             path: contributionCol.path,
             operation: 'create',
             requestResourceData: dataToSave,
         });
         errorEmitter.emit('permission-error', permissionError);
-    });
+    throw error;
+  }
 }
 
 // --- Chat Functions ---
@@ -284,7 +521,7 @@ export function subscribeToMessages(callback: (messages: ChatMessage[]) => void)
       } as ChatMessage;
     });
     callback(messageList);
-  }, (error) => {
+  }, () => {
     const permissionError = new FirestorePermissionError({
         path: messagesCol.path,
         operation: 'list',
@@ -303,14 +540,62 @@ export async function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp' |
     timestamp: Timestamp.now(),
     readBy: [message.userId],
   };
-  addDoc(messagesCol, dataToSave).catch(async () => {
+  try {
+    await addDoc(messagesCol, dataToSave);
+  } catch (error) {
     const permissionError = new FirestorePermissionError({
         path: messagesCol.path,
         operation: 'create',
         requestResourceData: dataToSave,
     });
     errorEmitter.emit('permission-error', permissionError);
-  });
+    throw error;
+  }
+}
+
+export function subscribeToAuditLogs(
+  count: number,
+  callback: (logs: AuditLogEntry[]) => void,
+  lastVisible?: AuditLogEntry,
+): () => void {
+  const auditCol = collection(db, 'auditLogs');
+  let q = query(auditCol, orderBy('timestamp', 'desc'), limit(count));
+
+  if (lastVisible) {
+    q = query(
+      auditCol,
+      orderBy('timestamp', 'desc'),
+      startAfter(Timestamp.fromMillis(Date.parse(lastVisible.timestamp))),
+      limit(count),
+    );
+  }
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const logList = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          actorId: (data.actorId as string) || 'admin',
+          action: (data.action as string) || 'unknown',
+          metadata: (data.metadata as Record<string, unknown> | null) || null,
+          timestamp: (data.timestamp as Timestamp).toDate().toISOString(),
+        } as AuditLogEntry;
+      });
+      callback(logList);
+    },
+    () => {
+      const permissionError = new FirestorePermissionError({
+        path: auditCol.path,
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      callback([]);
+    },
+  );
+
+  return unsubscribe;
 }
 
 export async function markMessagesAsRead(messageIds: string[], userId: string): Promise<void> {
@@ -322,14 +607,17 @@ export async function markMessagesAsRead(messageIds: string[], userId: string): 
       readBy: arrayUnion(userId)
     });
   });
-  batch.commit().catch(async () => {
+  try {
+    await batch.commit();
+  } catch (error) {
       const permissionError = new FirestorePermissionError({
         path: 'messages/[multiple]',
         operation: 'update',
         requestResourceData: { readBy: `arrayUnion(${userId})` },
       });
       errorEmitter.emit('permission-error', permissionError);
-  });
+      throw error;
+  }
 }
 
 // --- Report & Archive Data Functions ---
@@ -419,6 +707,11 @@ export async function clearAllData(): Promise<void> {
 
 // --- Data Seeding Function ---
 export async function seedDatabase() {
+    const appConfig = await getAppConfig();
+    if (appConfig?.initialized) {
+      return;
+    }
+
     const usersCol = collection(db, 'users');
   try {
     const usersSnapshot = await getDocs(query(usersCol, limit(1)));

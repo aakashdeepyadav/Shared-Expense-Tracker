@@ -1,12 +1,7 @@
-
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -28,17 +23,21 @@ import { HistoryShimmer } from "@/components/shimmers/history-shimmer";
 const PAGE_SIZE = 20;
 
 export default function ContributionHistoryPage() {
-  const { currentUser, isAuthLoading } = useAuth();
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [lastContribution, setLastContribution] = useState<Contribution | undefined>(undefined);
+  const [lastContribution, setLastContribution] = useState<
+    Contribution | undefined
+  >(undefined);
 
   useEffect(() => {
-    if (!isAuthLoading && !currentUser) {
+    if (!isAuthLoading && !isAppConfigured) {
+      router.push("/setup");
+    } else if (!isAuthLoading && !currentUser) {
       router.push("/login");
     } else if (currentUser) {
       setIsLoading(true);
@@ -51,7 +50,7 @@ export default function ContributionHistoryPage() {
             setLastContribution(newContributions[newContributions.length - 1]);
           }
           setIsLoading(false);
-        }
+        },
       );
 
       const unsubUsers = subscribeToUsers((newUsers) => {
@@ -63,14 +62,16 @@ export default function ContributionHistoryPage() {
         unsubUsers();
       };
     }
-  }, [currentUser, isAuthLoading, router]);
-  
+  }, [currentUser, isAppConfigured, isAuthLoading, router]);
+
   const handleLoadMore = () => {
     if (!hasMore || isLoadingMore || !lastContribution) return;
     setIsLoadingMore(true);
-    
+
     // We create a one-time subscription to get the next page
-    const unsub = subscribeToContributions(PAGE_SIZE, (newContributions) => {
+    const unsub = subscribeToContributions(
+      PAGE_SIZE,
+      (newContributions) => {
         setContributions((prev) => [...prev, ...newContributions]);
         setHasMore(newContributions.length === PAGE_SIZE);
         if (newContributions.length > 0) {
@@ -78,27 +79,43 @@ export default function ContributionHistoryPage() {
         }
         setIsLoadingMore(false);
         // Unsubscribe immediately after getting the data
-        unsub(); 
-    }, lastContribution);
+        unsub();
+      },
+      lastContribution,
+    );
   };
 
   const userMap = new Map(users.map((user) => [user.id, user]));
 
+  const visibleContributions =
+    isAdmin || !currentUser
+      ? contributions
+      : contributions.filter(
+          (contribution) => contribution.contributorId === currentUser.id,
+        );
+
   if (isLoading) {
-    return <HistoryShimmer title="Contribution History" description="A list of all recorded wallet contributions."/>;
+    return (
+      <HistoryShimmer
+        title="Contribution History"
+        description="A list of all recorded wallet contributions."
+      />
+    );
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-up">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold font-headline">Contribution History</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
+          Contribution History
+        </h1>
+        <p className="text-sm md:text-base text-muted-foreground">
           Showing all recorded contributions.
         </p>
       </header>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
+      <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Contributor</TableHead>
@@ -107,8 +124,8 @@ export default function ContributionHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contributions.length > 0 ? (
-                contributions.map((contribution) => {
+              {visibleContributions.length > 0 ? (
+                visibleContributions.map((contribution) => {
                   const contributor = userMap.get(contribution.contributorId);
                   return (
                     <TableRow key={contribution.id}>
@@ -124,7 +141,9 @@ export default function ContributionHistoryPage() {
                               {contributor?.name.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="font-medium">{contributor?.name}</span>
+                          <span className="font-medium">
+                            {contributor?.name}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
@@ -142,19 +161,18 @@ export default function ContributionHistoryPage() {
                     colSpan={3}
                     className="text-center text-muted-foreground py-8"
                   >
-                    No contributions found.
+                    {isAdmin
+                      ? "No contributions found."
+                      : "No personal contributions found."}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
-         {hasMore && (
+        {isAdmin && hasMore && (
           <CardFooter className="pt-6 justify-center">
-            <Button
-              onClick={handleLoadMore}
-              disabled={isLoadingMore}
-            >
+            <Button onClick={handleLoadMore} disabled={isLoadingMore}>
               {isLoadingMore ? "Loading..." : "Load More"}
             </Button>
           </CardFooter>

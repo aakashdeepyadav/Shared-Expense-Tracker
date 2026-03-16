@@ -11,6 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { getAllUsers, getAllExpensesForReport, getAllContributionsForReport } from '@/lib/firestore';
+import type { User, Expense, Contribution } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 
 const ExpenseByCategorySchema = z.object({
@@ -87,44 +88,20 @@ const generateReportFlow = ai.defineFlow(
     outputSchema: GenerateReportOutputSchema,
   },
   async ({ users, expenses, contributions }) => {
+    const typedUsers = users as User[];
+    const typedExpenses = expenses as Expense[];
+    const typedContributions = contributions as Contribution[];
     
     // --- 1. Perform all calculations in TypeScript ---
 
-    const totalContributions = contributions.reduce((acc, c) => acc + c.amount, 0);
-    const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+    const totalContributions = typedContributions.reduce((acc, c) => acc + c.amount, 0);
+    const totalExpenses = typedExpenses.reduce((acc, e) => acc + e.amount, 0);
     const walletBalance = totalContributions - totalExpenses;
-    const expensePerMember = users.length > 0 ? totalExpenses / users.length : 0;
-
-    const expenseBreakdown = expenses.reduce((acc, expense) => {
-        expense.tags.forEach((tag: string) => {
-            const existing = acc.find(item => item.category === tag);
-            if (existing) {
-                // If an expense has multiple tags, we distribute its amount among the tags.
-                // This is a simple approach. A more complex one might weigh them.
-                // For now, we'll just add the expense amount to each tag's total.
-                // To avoid double counting, we should only count it once per expense.
-                // Let's adjust: we'll count amount per tag.
-                existing.total += expense.amount;
-            } else {
-                acc.push({ category: tag, total: expense.amount });
-            }
-        });
-        return acc;
-    }, [] as { category: string; total: number; }[]).reduce((acc, current) => {
-        // This second reduce is to combine tags that might have been added multiple times if an expense had duplicate tags.
-        const existing = acc.find(item => item.category === current.category);
-        if (existing) {
-             // This logic is flawed, let's fix it. We need to sum up unique expenses per tag.
-        } else {
-            acc.push(current);
-        }
-        return acc;
-
-    }, [] as { category: string; total: number; }[]);
+    const expensePerMember = typedUsers.length > 0 ? totalExpenses / typedUsers.length : 0;
     
     // Correct way to calculate expense breakdown by tag
     const breakdownMap = new Map<string, number>();
-    expenses.forEach(expense => {
+    typedExpenses.forEach(expense => {
         expense.tags.forEach((tag: string) => {
             breakdownMap.set(tag, (breakdownMap.get(tag) || 0) + expense.amount);
         });
@@ -133,16 +110,16 @@ const generateReportFlow = ai.defineFlow(
 
 
     const memberBalances = new Map<string, { paid: number; share: number; contributed: number }>();
-    users.forEach(u => memberBalances.set(u.id, { paid: 0, share: 0, contributed: 0 }));
+    typedUsers.forEach(u => memberBalances.set(u.id, { paid: 0, share: 0, contributed: 0 }));
 
-    contributions.forEach(c => {
+    typedContributions.forEach(c => {
         const balance = memberBalances.get(c.contributorId);
         if (balance) {
             balance.contributed += c.amount;
         }
     });
 
-    expenses.forEach(e => {
+    typedExpenses.forEach(e => {
         // Only credit the expense to a member if they paid for it personally, not from the wallet
         if (e.payerId !== 'tifresh') {
              const payerBalance = memberBalances.get(e.payerId);
@@ -159,8 +136,8 @@ const generateReportFlow = ai.defineFlow(
         });
     });
 
-    const memberContributions = users.map(user => {
-        const balance = memberBalances.get(user.id) || { paid: 0, contributed: 0 };
+    const memberContributions = typedUsers.map(user => {
+      const balance = memberBalances.get(user.id) || { paid: 0, share: 0, contributed: 0 };
         return {
             name: user.name,
             total: balance.paid + balance.contributed,
@@ -173,7 +150,7 @@ const generateReportFlow = ai.defineFlow(
         totalExpenses,
         totalContributions,
         walletBalance,
-        expenseCount: expenses.length,
+        expenseCount: typedExpenses.length,
     });
     const aiSummary = output?.summary || "Here is your monthly financial summary.";
 
@@ -188,7 +165,7 @@ const generateReportFlow = ai.defineFlow(
     
     const finalBalances = new Map<string, number>();
 
-    users.forEach(user => {
+    typedUsers.forEach(user => {
       const balance = memberBalances.get(user.id) || { paid: 0, share: 0, contributed: 0 };
       const netBalance = (balance.paid + balance.contributed) - balance.share;
       finalBalances.set(user.id, netBalance);
@@ -210,8 +187,8 @@ const generateReportFlow = ai.defineFlow(
 
         const amountToSettle = Math.min(payerAmount, Math.abs(owerAmount));
         
-        const owerName = users.find(u => u.id === owerId)?.name || owerId;
-        const payerName = users.find(u => u.id === payerId)?.name || payerId;
+        const owerName = typedUsers.find(u => u.id === owerId)?.name || owerId;
+        const payerName = typedUsers.find(u => u.id === payerId)?.name || payerId;
 
         settlementSteps += `*   **${owerName}** owes **${payerName}** ${formatCurrency(amountToSettle)}.\n`;
 
