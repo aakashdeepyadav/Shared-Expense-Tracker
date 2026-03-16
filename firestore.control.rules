@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Restrict control plane writes/reads to authenticated control admins.
+    // Replace `isControlAdmin` logic with your own claims model.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isControlAdmin() {
+      return isSignedIn() && request.auth.token.role == 'control_admin';
+    }
+
+    match /controlGroups/{groupId} {
+      allow read: if isControlAdmin();
+      allow create, update: if isControlAdmin();
+      allow delete: if false;
+    }
+  }
+}

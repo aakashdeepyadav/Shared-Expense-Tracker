@@ -11,6 +11,7 @@ import {
   ReceiptText,
   PiggyBank,
   MessageSquare,
+  ShieldCheck,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import {
@@ -131,6 +132,21 @@ export function AppSidebar() {
                 <Link href="/reports">
                   <FileText />
                   Reports
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {isAdmin && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === "/control-admin"}
+                tooltip="Control Admin"
+                className="rounded-xl h-10"
+              >
+                <Link href="/control-admin">
+                  <ShieldCheck />
+                  Control Admin
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

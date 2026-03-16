@@ -46,6 +46,7 @@ export type AppConfig = {
 };
 
 export type TrackerSetupPayload = {
+  groupId?: string;
   groupName: string;
   groupImageUrl?: string;
   memberTypeLabel?: string;

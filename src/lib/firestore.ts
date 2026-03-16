@@ -117,7 +117,7 @@ export async function isAppInitialized(): Promise<boolean> {
   return !!appConfig?.initialized;
 }
 
-export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<void> {
+export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<string> {
   const appConfigRef = doc(db, 'config', 'app');
   const adminConfigRef = doc(db, 'config', 'admin');
 
@@ -194,7 +194,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   });
 
   const nowIso = new Date().toISOString();
-  const groupId = generateGroupId(payload.groupName);
+  const groupId = payload.groupId || generateGroupId(payload.groupName);
   batch.set(appConfigRef, {
     initialized: true,
     groupId,
@@ -213,6 +213,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
 
   try {
     await batch.commit();
+    return groupId;
   } catch (error) {
     const permissionError = new FirestorePermissionError({
       path: 'config/app + config/admin + users',

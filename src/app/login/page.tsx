@@ -45,15 +45,18 @@ export default function LoginPage() {
     currentUser,
     isAuthLoading,
     isAppConfigured,
+    setupBlockReason,
     appConfig,
     users,
     isDataLoading,
+    retryControlVerification,
     getLockoutTime,
     verifyPin,
     savePhoneNumberAndSendOtp,
     verifyOtp,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRetryingVerification, setIsRetryingVerification] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
@@ -251,12 +254,39 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {setupBlockReason && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Setup Verification Required</AlertTitle>
+                <AlertDescription>{setupBlockReason}</AlertDescription>
+              </Alert>
+            )}
             <Button className="w-full" asChild>
               <Link href="/setup">
                 Signup
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
+            {setupBlockReason && (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={isRetryingVerification}
+                onClick={async () => {
+                  setIsRetryingVerification(true);
+                  const ok = await retryControlVerification();
+                  if (ok) {
+                    toast({
+                      title: "Verification refreshed",
+                      description: "Control-plane status has been re-checked.",
+                    });
+                  }
+                  setIsRetryingVerification(false);
+                }}
+              >
+                {isRetryingVerification ? "Checking..." : "Retry Verification"}
+              </Button>
+            )}
             <Button variant="outline" className="w-full" disabled>
               Login will be enabled after setup
             </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -29,6 +29,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { initializeTrackerInstance } from "@/lib/firestore";
 import { setRuntimeFirebaseConfig } from "@/lib/firebase";
+import {
+  controlAuth,
+  registerGroupControlRecord,
+  setActiveControlGroupId,
+} from "@/lib/control-plane";
+import {
+  ConfirmationResult,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  signOut,
+} from "firebase/auth";
 import { CheckCircle2, Info } from "lucide-react";
 import type {
   FirebaseProjectConfigInput,
@@ -105,6 +116,36 @@ function validateFirebaseProjectConfig(
   return null;
 }
 
+function generateGroupIdForSetup(groupName: string): string {
+  const slug = groupName
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${slug || "group"}-${suffix}`;
+}
+
+function normalizeIndianPhoneNumber(phoneNumber?: string): string | null {
+  if (!phoneNumber) return null;
+  const onlyDigits = phoneNumber.replace(/\D/g, "");
+  if (onlyDigits.length === 10) {
+    return `+91${onlyDigits}`;
+  }
+  if (phoneNumber.startsWith("+")) {
+    return phoneNumber;
+  }
+  return null;
+}
+
+async function hashSha256(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -129,6 +170,15 @@ export default function SetupPage() {
   const [firebaseProjectConfig, setFirebaseProjectConfig] =
     useState<FirebaseProjectConfigInput | null>(null);
   const [firebaseJsonInput, setFirebaseJsonInput] = useState("");
+  const [adminOtp, setAdminOtp] = useState("");
+  const [adminOtpSent, setAdminOtpSent] = useState(false);
+  const [adminOtpVerified, setAdminOtpVerified] = useState(false);
+  const [isSendingAdminOtp, setIsSendingAdminOtp] = useState(false);
+  const [isVerifyingAdminOtp, setIsVerifyingAdminOtp] = useState(false);
+  const [lastOtpPhone, setLastOtpPhone] = useState<string | null>(null);
+  const [adminOtpConfirmation, setAdminOtpConfirmation] =
+    useState<ConfirmationResult | null>(null);
+  const setupRecaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
     if (!isAuthLoading && isAppConfigured) {
@@ -137,6 +187,18 @@ export default function SetupPage() {
   }, [isAuthLoading, isAppConfigured, router]);
 
   const stepIndex = setupSteps.indexOf(currentStep);
+  const adminPhoneE164 = useMemo(
+    () => normalizeIndianPhoneNumber(members[adminIndex]?.phoneNumber),
+    [members, adminIndex],
+  );
+
+  useEffect(() => {
+    setAdminOtpSent(false);
+    setAdminOtpVerified(false);
+    setAdminOtp("");
+    setAdminOtpConfirmation(null);
+    setLastOtpPhone(null);
+  }, [adminPhoneE164]);
 
   const canContinue = useMemo(() => {
     if (currentStep === "group") {
@@ -154,7 +216,9 @@ export default function SetupPage() {
       return (
         adminIndex >= 0 &&
         adminIndex < members.length &&
-        adminPassword.trim().length >= 8
+        adminPassword.trim().length >= 8 &&
+        !!adminPhoneE164 &&
+        adminOtpVerified
       );
     }
     if (currentStep === "integrations") {
@@ -168,6 +232,8 @@ export default function SetupPage() {
     members,
     adminIndex,
     adminPassword,
+    adminPhoneE164,
+    adminOtpVerified,
     firebaseProjectConfig,
   ]);
 
@@ -190,7 +256,11 @@ export default function SetupPage() {
       const selectedAdmin =
         adminIndex >= 0 && adminIndex < members.length ? 1 : 0;
       const passwordProgress = Math.min(adminPassword.trim().length / 8, 1);
-      return (selectedAdmin + passwordProgress) / 2;
+      const phoneProgress = adminPhoneE164 ? 1 : 0;
+      const otpProgress = adminOtpVerified ? 1 : 0;
+      return (
+        (selectedAdmin + passwordProgress + phoneProgress + otpProgress) / 4
+      );
     }
     if (step === "integrations") {
       return 1;
@@ -362,6 +432,99 @@ export default function SetupPage() {
     }
   };
 
+  const setupRecaptcha = () => {
+    if (setupRecaptchaRef.current) {
+      setupRecaptchaRef.current.clear();
+      setupRecaptchaRef.current = null;
+    }
+
+    const container = document.getElementById("setup-recaptcha-container");
+    if (!container) {
+      return null;
+    }
+
+    setupRecaptchaRef.current = new RecaptchaVerifier(controlAuth, container, {
+      size: "invisible",
+    });
+
+    return setupRecaptchaRef.current;
+  };
+
+  const handleSendAdminOtp = async () => {
+    if (!adminPhoneE164) {
+      toast({
+        variant: "destructive",
+        title: "Admin phone required",
+        description: "Add a valid admin phone number to verify with OTP.",
+      });
+      return;
+    }
+
+    setIsSendingAdminOtp(true);
+    try {
+      const verifier = setupRecaptchaRef.current || setupRecaptcha();
+      if (!verifier) {
+        throw new Error("Recaptcha is not ready. Please try again.");
+      }
+
+      const confirmation = await signInWithPhoneNumber(
+        controlAuth,
+        adminPhoneE164,
+        verifier,
+      );
+      setAdminOtpConfirmation(confirmation);
+      setAdminOtpSent(true);
+      setAdminOtpVerified(false);
+      setLastOtpPhone(adminPhoneE164);
+      toast({
+        title: "OTP sent",
+        description: `OTP sent to ${adminPhoneE164}`,
+      });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "OTP failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Could not send OTP. Check Firebase Auth domain settings.",
+      });
+    } finally {
+      setIsSendingAdminOtp(false);
+    }
+  };
+
+  const handleVerifyAdminOtp = async () => {
+    if (!adminOtpConfirmation || !adminOtp.trim()) {
+      toast({
+        variant: "destructive",
+        title: "OTP required",
+        description: "Enter the OTP you received to verify admin.",
+      });
+      return;
+    }
+
+    setIsVerifyingAdminOtp(true);
+    try {
+      await adminOtpConfirmation.confirm(adminOtp.trim());
+      await signOut(controlAuth);
+      setAdminOtpVerified(true);
+      toast({
+        title: "Admin verified",
+        description: "Admin phone OTP verification is complete.",
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Invalid OTP",
+        description: "Please check OTP and try again.",
+      });
+      setAdminOtpVerified(false);
+    } finally {
+      setIsVerifyingAdminOtp(false);
+    }
+  };
+
   const submitSetup = async () => {
     if (!canContinue) {
       return;
@@ -380,6 +543,7 @@ export default function SetupPage() {
     }
 
     const payload: TrackerSetupPayload = {
+      groupId: generateGroupIdForSetup(groupName),
       groupName,
       groupImageUrl: groupImageUrl || undefined,
       memberTypeLabel,
@@ -407,7 +571,24 @@ export default function SetupPage() {
 
     setIsSubmitting(true);
     try {
-      await initializeTrackerInstance(payload);
+      const groupId = await initializeTrackerInstance(payload);
+
+      const tenantConfigHash = await hashSha256(
+        JSON.stringify(payload.firebaseProjectConfig || {}),
+      );
+      const adminPhoneHash = await hashSha256(adminPhoneE164 || "");
+
+      await registerGroupControlRecord({
+        groupId,
+        groupName: payload.groupName,
+        adminName: members[adminIndex]?.name || "Admin",
+        adminPhoneHash,
+        tenantProjectId: payload.firebaseProjectConfig?.projectId || null,
+        tenantConfigHash,
+        groupImageUrl: payload.groupImageUrl || null,
+      });
+      setActiveControlGroupId(groupId);
+
       await refreshAppSetup();
       toast({
         title: "Tracker instance created",
@@ -663,38 +844,105 @@ export default function SetupPage() {
               )}
 
               {currentStep === "admin" && (
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Choose admin member</Label>
-                    <Select
-                      value={String(adminIndex)}
-                      onValueChange={(value) => setAdminIndex(Number(value))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select admin" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map((member, index) => (
-                          <SelectItem
-                            key={`admin-${index}`}
-                            value={String(index)}
+                <div className="space-y-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Choose admin member</Label>
+                      <Select
+                        value={String(adminIndex)}
+                        onValueChange={(value) => setAdminIndex(Number(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select admin" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {members.map((member, index) => (
+                            <SelectItem
+                              key={`admin-${index}`}
+                              value={String(index)}
+                            >
+                              {member.name || `Member ${index + 1}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-password">Admin password</Label>
+                      <Input
+                        id="admin-password"
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="At least 8 characters"
+                      />
+                    </div>
+                  </div>
+
+                  <Card className="border border-primary/20 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">
+                        Admin OTP Verification
+                      </CardTitle>
+                      <CardDescription>
+                        Admin phone verification is required before setup can be
+                        completed.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="text-sm text-muted-foreground">
+                        Selected admin phone:{" "}
+                        <strong>{adminPhoneE164 || "Not provided"}</strong>
+                      </div>
+                      {!adminPhoneE164 && (
+                        <p className="text-sm text-destructive">
+                          Add a valid 10-digit phone number for the selected
+                          admin in Member details.
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSendAdminOtp}
+                          disabled={isSendingAdminOtp || !adminPhoneE164}
+                        >
+                          {isSendingAdminOtp ? "Sending OTP..." : "Send OTP"}
+                        </Button>
+                        {adminOtpSent && !adminOtpVerified && (
+                          <Badge variant="secondary">OTP sent</Badge>
+                        )}
+                        {adminOtpVerified && (
+                          <Badge className="bg-emerald-600">OTP verified</Badge>
+                        )}
+                      </div>
+                      {adminOtpSent && (
+                        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                          <Input
+                            value={adminOtp}
+                            onChange={(e) => setAdminOtp(e.target.value)}
+                            placeholder="Enter 6-digit OTP"
+                            maxLength={6}
+                          />
+                          <Button
+                            type="button"
+                            onClick={handleVerifyAdminOtp}
+                            disabled={isVerifyingAdminOtp || !adminOtp.trim()}
                           >
-                            {member.name || `Member ${index + 1}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin-password">Admin password</Label>
-                    <Input
-                      id="admin-password"
-                      type="password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      placeholder="At least 8 characters"
-                    />
-                  </div>
+                            {isVerifyingAdminOtp
+                              ? "Verifying..."
+                              : "Verify OTP"}
+                          </Button>
+                        </div>
+                      )}
+                      {lastOtpPhone && lastOtpPhone !== adminPhoneE164 && (
+                        <p className="text-xs text-amber-600">
+                          Admin phone changed. Please send OTP again.
+                        </p>
+                      )}
+                      <div id="setup-recaptcha-container" />
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 
