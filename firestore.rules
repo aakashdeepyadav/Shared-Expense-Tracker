@@ -2,6 +2,61 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function appConfigExists() {
+      return exists(/databases/$(database)/documents/config/app);
+    }
+
+    // Setup page runs before auth. Allow one-time bootstrap writes only
+    // while app config does not exist yet.
+    function canBootstrapSetup() {
+      return !appConfigExists();
+    }
+
+    match /config/app {
+      allow create: if canBootstrapSetup();
+      allow read: if true;
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /config/admin {
+      allow create: if canBootstrapSetup();
+      allow read: if true;
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /users/{userId} {
+      allow create: if canBootstrapSetup();
+      allow read, create, update: if true;
+      allow delete: if false;
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /contributions/{contributionId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /auditLogs/{entryId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /monthArchives/{archiveId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Block everything else by default.
     match /{document=**} {
       allow read, write: if false;
     }
