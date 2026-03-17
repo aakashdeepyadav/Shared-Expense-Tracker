@@ -143,10 +143,12 @@ const generateReportFlow = ai.defineFlow(
         });
     });
 
-    const totalParticipantExpenseShare = Array.from(memberBalances.values())
-      .reduce((sum, balance) => sum + balance.share, 0);
+    const totalParticipantSlots = typedExpenses.reduce(
+      (sum, expense) => sum + expense.participants.length,
+      0,
+    );
     const expensePerMember =
-      typedUsers.length > 0 ? totalParticipantExpenseShare / typedUsers.length : 0;
+      totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
 
     const memberContributions = typedUsers.map(user => {
       const balance = memberBalances.get(user.id) || { paid: 0, share: 0, contributed: 0 };

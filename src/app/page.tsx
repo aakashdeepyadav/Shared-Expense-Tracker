@@ -283,7 +283,7 @@ export default function DashboardPage() {
                   (wallet contributions + expenses paid).
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="min-w-0 overflow-hidden">
                 <ContributionChart
                   contributions={contributions}
                   users={users}
@@ -301,7 +301,7 @@ export default function DashboardPage() {
                     A list of the most recent expenses.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="min-w-0 overflow-hidden">
                   <RecentExpenses expenses={visibleExpenses} users={users} />
                 </CardContent>
               </Card>
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                     Recent additions to the group wallet.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="min-w-0 overflow-hidden">
                   <RecentContributions
                     contributions={visibleContributions}
                     users={users}

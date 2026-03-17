@@ -13,9 +13,52 @@ It helps a household, team, or travel group track contributions, expenses, chat,
 - Admin and member login flows (shared member PIN model, admin password model).
 - Dashboard for balances, recent activity, and contribution trends.
 - Expense and contribution history with archive support.
+- Admin can edit/delete current-month expenses and contributions.
 - Chat with read-state tracking.
 - Professional report generation with print/PDF support.
 - Monthly rollover that archives current month data and starts a new live period.
+- Group logo/picture can be updated later from Settings.
+- Mobile-first responsive layout and overflow-safe dashboard rendering.
+
+## Recent Updates (2026-03)
+
+- Added admin edit/delete controls for current-month records:
+  - Expense History: edit/delete
+  - Contribution History: edit/delete
+- Fixed Add Expense date picker interaction so date selection works reliably.
+- Added extra predefined expense tags:
+  - fruits, milk, eggs, store
+- Added Settings flow to update/clear group picture URL.
+- Improved mobile dashboard/header responsiveness to prevent horizontal overflow.
+
+## Financial Logic Rules
+
+These rules are now applied consistently in dashboard cards, reports, and AI report flow.
+
+1. Member Contribution
+
+- Member contribution = direct wallet contributions + personally paid expenses.
+
+2. Wallet Balance
+
+- Wallet balance = total contributions - wallet-paid expenses.
+- Member-paid expenses do not reduce wallet balance.
+- Wallet balance may be negative.
+
+3. Expense Share Per Expense
+
+- For each expense, share = expense amount / number of participants in that expense.
+- If all members participate, split across all.
+- If fewer members participate, split only across participants.
+
+4. Expense per Member (average)
+
+- Computed from accumulated participant shares across all expenses,
+  then averaged over total members in the group.
+
+5. Edit Consistency
+
+- When an expense amount is edited, participant shares are recomputed to keep splits consistent.
 
 ## Tech Stack
 

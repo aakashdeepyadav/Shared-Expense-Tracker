@@ -61,7 +61,7 @@ export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
                     />
                     <AvatarFallback>{payer?.name.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="min-w-0 truncate text-sm text-muted-foreground">
                     {payer?.name}
                   </span>
                 </div>

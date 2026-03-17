@@ -70,6 +70,10 @@ function normalizeIndianPhoneNumber(phoneNumber?: string): string | undefined {
   return undefined;
 }
 
+function roundToTwoDecimals(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function isHashedCredential(value: string): boolean {
   return value.startsWith('sha256:');
 }
@@ -836,8 +840,17 @@ export function subscribeToExpenses(
 export async function addExpense(expenseData: Omit<Expense, 'id' | 'date'> & { date: Date }): Promise<void> {
   const resolvedGroupId = resolveGroupId();
   const expenseCol = groupCollection(resolvedGroupId, 'expenses');
+  const roundedAmount = roundToTwoDecimals(expenseData.amount);
+  const participantCount = expenseData.participants.length;
+  const participantShare =
+    participantCount > 0 ? roundToTwoDecimals(roundedAmount / participantCount) : 0;
   const dataToSave = {
     ...expenseData,
+    amount: roundedAmount,
+    participants: expenseData.participants.map((participant) => ({
+      ...participant,
+      share: participantShare,
+    })),
     date: Timestamp.fromDate(expenseData.date),
   };
   try {
@@ -873,13 +886,20 @@ export async function updateExpense(
     throw new Error('Amount must be greater than 0.');
   }
 
+  if (typeof updates.amount === 'number') {
+    payload.amount = roundToTwoDecimals(updates.amount);
+  }
+
   if (typeof updates.amount === 'number' && !updates.participants) {
     const existingSnapshot = await getDoc(expenseRef);
     if (existingSnapshot.exists()) {
       const existingExpense = existingSnapshot.data() as Expense;
       const existingParticipants = existingExpense.participants || [];
       if (existingParticipants.length > 0) {
-        const recomputedShare = updates.amount / existingParticipants.length;
+        const roundedAmount = roundToTwoDecimals(updates.amount);
+        const recomputedShare = roundToTwoDecimals(
+          roundedAmount / existingParticipants.length,
+        );
         payload.participants = existingParticipants.map((participant) => ({
           ...participant,
           share: recomputedShare,
@@ -972,6 +992,7 @@ export async function addContribution(
   const contributionCol = groupCollection(resolvedGroupId, 'contributions');
   const dataToSave = {
     ...contributionData,
+    amount: roundToTwoDecimals(contributionData.amount),
     date: Timestamp.fromDate(contributionData.date),
   };
   try {
@@ -1008,6 +1029,10 @@ export async function updateContribution(
     contributionId,
   );
   const payload: Record<string, unknown> = { ...updates };
+
+  if (typeof updates.amount === 'number') {
+    payload.amount = roundToTwoDecimals(updates.amount);
+  }
 
   if (updates.date) {
     payload.date = Timestamp.fromDate(updates.date);

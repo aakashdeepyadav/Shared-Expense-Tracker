@@ -19,11 +19,7 @@ type OverviewCardsProps = {
   users: User[];
 };
 
-export function OverviewCards({
-  expenses,
-  contributions,
-  users,
-}: OverviewCardsProps) {
+export function OverviewCards({ expenses, contributions }: OverviewCardsProps) {
   const { currentUser, isAdmin } = useAuth();
 
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
@@ -53,29 +49,13 @@ export function OverviewCards({
 
   const walletBalance = totalContributions - walletExpenses;
 
-  const memberExpenseShareTotals = new Map<string, number>();
-  users.forEach((user) => memberExpenseShareTotals.set(user.id, 0));
-
-  expenses.forEach((expense) => {
-    const participantCount = expense.participants.length;
-    if (participantCount === 0) return;
-
-    const normalizedShare = expense.amount / participantCount;
-    expense.participants.forEach((participant) => {
-      const current = memberExpenseShareTotals.get(participant.userId) || 0;
-      memberExpenseShareTotals.set(
-        participant.userId,
-        current + normalizedShare,
-      );
-    });
-  });
-
-  const totalParticipantExpenseShares = Array.from(
-    memberExpenseShareTotals.values(),
-  ).reduce((sum, value) => sum + value, 0);
+  const totalParticipantSlots = expenses.reduce(
+    (sum, expense) => sum + expense.participants.length,
+    0,
+  );
 
   const expensePerMember =
-    users.length > 0 ? totalParticipantExpenseShares / users.length : 0;
+    totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
 
   const walletStatusLabel =
     walletBalance >= 0 ? "Healthy wallet" : "Deficit alert";

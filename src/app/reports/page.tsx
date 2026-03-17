@@ -135,11 +135,12 @@ function buildClientReport(
     });
   });
 
-  const totalParticipantExpenseShare = Array.from(
-    memberBalances.values(),
-  ).reduce((sum, balance) => sum + balance.share, 0);
+  const totalParticipantSlots = expenses.reduce(
+    (sum, expense) => sum + expense.participants.length,
+    0,
+  );
   const expensePerMember =
-    users.length > 0 ? totalParticipantExpenseShare / users.length : 0;
+    totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
 
   const memberRows = users
     .map((user) => {

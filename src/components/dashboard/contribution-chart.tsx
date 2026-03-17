@@ -68,11 +68,14 @@ export function ContributionChart({
   });
 
   return (
-    <ChartContainer config={chartConfig} className="min-h-[240px] w-full">
+    <ChartContainer
+      config={chartConfig}
+      className="min-h-[220px] w-full min-w-0 overflow-hidden"
+    >
       <BarChart
         accessibilityLayer
         data={contributionData}
-        margin={{ top: 16, right: 20, bottom: 8, left: 8 }}
+        margin={{ top: 12, right: 8, bottom: 8, left: 0 }}
       >
         <CartesianGrid vertical={false} strokeDasharray="3 4" opacity={0.35} />
         <XAxis
@@ -80,6 +83,8 @@ export function ContributionChart({
           tickLine={false}
           tickMargin={10}
           axisLine={false}
+          interval={0}
+          tickFormatter={(value) => String(value).slice(0, 8)}
           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
         />
         <YAxis
@@ -87,7 +92,7 @@ export function ContributionChart({
           tickLine={false}
           axisLine={false}
           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-          width={66}
+          width={52}
         />
         <ChartTooltip
           cursor={false}

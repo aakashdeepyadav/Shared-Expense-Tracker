@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,10 +20,16 @@ import {
   getMonthArchiveById,
   getMonthArchives,
   subscribeToContributions,
+  subscribeToExpenses,
   subscribeToUsers,
   updateContribution,
 } from "@/lib/firestore";
-import type { Contribution, MonthArchiveSummary, User } from "@/lib/types";
+import type {
+  Contribution,
+  Expense,
+  MonthArchiveSummary,
+  User,
+} from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -49,12 +56,23 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 20;
+const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
+
+type MemberHistoryEntry = {
+  id: string;
+  actorId: string;
+  amount: number;
+  date: string;
+  source: "wallet" | "paid-expense";
+  label: string;
+};
 
 export default function ContributionHistoryPage() {
   const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -80,6 +98,14 @@ export default function ContributionHistoryPage() {
       router.push("/login");
     } else if (currentUser) {
       setIsLoading(true);
+      let contributionsLoaded = false;
+      let expensesLoaded = false;
+      const markLoaded = () => {
+        if (contributionsLoaded && expensesLoaded) {
+          setIsLoading(false);
+        }
+      };
+
       const unsubContributions =
         selectedPeriod === "current"
           ? subscribeToContributions(PAGE_SIZE, (newContributions) => {
@@ -90,14 +116,29 @@ export default function ContributionHistoryPage() {
                   newContributions[newContributions.length - 1],
                 );
               }
-              setIsLoading(false);
+              contributionsLoaded = true;
+              markLoaded();
             })
-          : () => {};
+          : () => {
+              // noop
+            };
+
+      const unsubExpenses =
+        selectedPeriod === "current"
+          ? subscribeToExpenses(PAGE_SIZE, (newExpenses) => {
+              setExpenses(newExpenses);
+              expensesLoaded = true;
+              markLoaded();
+            })
+          : () => {
+              // noop
+            };
 
       if (selectedPeriod !== "current") {
         void (async () => {
           const archive = await getMonthArchiveById(selectedPeriod);
           setContributions(archive?.contributions || []);
+          setExpenses(archive?.expenses || []);
           setHasMore(false);
           setLastContribution(undefined);
           setIsLoading(false);
@@ -115,6 +156,7 @@ export default function ContributionHistoryPage() {
 
       return () => {
         unsubContributions();
+        unsubExpenses();
         unsubUsers();
       };
     }
@@ -239,6 +281,33 @@ export default function ContributionHistoryPage() {
           (contribution) => contribution.contributorId === currentUser.id,
         );
 
+  const memberHistoryEntries: MemberHistoryEntry[] = currentUser
+    ? [
+        ...visibleContributions.map((contribution) => ({
+          id: `wallet-${contribution.id}`,
+          actorId: contribution.contributorId,
+          amount: contribution.amount,
+          date: contribution.date,
+          source: "wallet" as const,
+          label: "Wallet Contribution",
+        })),
+        ...expenses
+          .filter(
+            (expense) =>
+              expense.payerId !== WALLET_PAYER_ID &&
+              expense.payerId === currentUser.id,
+          )
+          .map((expense) => ({
+            id: `expense-${expense.id}`,
+            actorId: expense.payerId,
+            amount: expense.amount,
+            date: expense.date,
+            source: "paid-expense" as const,
+            label: expense.description || "Paid Expense",
+          })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
+
   if (isLoading) {
     return (
       <HistoryShimmer
@@ -259,8 +328,12 @@ export default function ContributionHistoryPage() {
             </h1>
             <p className="text-sm md:text-base text-muted-foreground">
               {selectedPeriod === "current"
-                ? "Showing current live-month contributions."
-                : "Showing archived month contributions."}
+                ? isAdmin
+                  ? "Showing current live-month wallet contributions."
+                  : "Showing your wallet contributions and personally paid expenses for current month."
+                : isAdmin
+                  ? "Showing archived month contributions."
+                  : "Showing your archived wallet contributions and paid expenses."}
             </p>
           </header>
           <div className="sticky top-2 z-20 mb-4">
@@ -283,73 +356,113 @@ export default function ContributionHistoryPage() {
           <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
             <CardContent className="p-0">
               <div className="md:hidden divide-y divide-border/60">
-                {visibleContributions.length > 0 ? (
-                  visibleContributions.map((contribution) => {
-                    const contributor = userMap.get(contribution.contributorId);
-                    return (
-                      <div key={contribution.id} className="p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Avatar className="h-7 w-7">
-                              <AvatarImage
-                                src={contributor?.avatarUrl}
-                                alt={contributor?.name}
-                                data-ai-hint="person portrait"
-                              />
-                              <AvatarFallback>
-                                {contributor?.name.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">
-                                {contributor?.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(
-                                  new Date(contribution.date),
-                                  "dd/MM/yyyy",
+                {(
+                  isAdmin
+                    ? visibleContributions.length > 0
+                    : memberHistoryEntries.length > 0
+                ) ? (
+                  (isAdmin ? visibleContributions : memberHistoryEntries).map(
+                    (entry) => {
+                      const contributor = userMap.get(
+                        isAdmin
+                          ? (entry as Contribution).contributorId
+                          : (entry as MemberHistoryEntry).actorId,
+                      );
+                      const amount = isAdmin
+                        ? (entry as Contribution).amount
+                        : (entry as MemberHistoryEntry).amount;
+                      const date = isAdmin
+                        ? (entry as Contribution).date
+                        : (entry as MemberHistoryEntry).date;
+                      const source = isAdmin
+                        ? "wallet"
+                        : (entry as MemberHistoryEntry).source;
+                      const label = isAdmin
+                        ? "Wallet Contribution"
+                        : (entry as MemberHistoryEntry).label;
+                      return (
+                        <div key={entry.id} className="p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-7 w-7">
+                                <AvatarImage
+                                  src={contributor?.avatarUrl}
+                                  alt={contributor?.name}
+                                  data-ai-hint="person portrait"
+                                />
+                                <AvatarFallback>
+                                  {contributor?.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">
+                                  {contributor?.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(date), "dd/MM/yyyy")}
+                                </p>
+                                {!isAdmin && (
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px]"
+                                    >
+                                      {source === "wallet"
+                                        ? "Wallet"
+                                        : "Paid Expense"}
+                                    </Badge>
+                                    {source === "paid-expense" && (
+                                      <span className="truncate text-[11px] text-muted-foreground">
+                                        {label}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
-                              </p>
+                              </div>
                             </div>
+                            <p className="text-sm font-semibold whitespace-nowrap">
+                              {formatCurrency(amount)}
+                            </p>
                           </div>
-                          <p className="text-sm font-semibold whitespace-nowrap">
-                            {formatCurrency(contribution.amount)}
-                          </p>
+                          {isAdmin && selectedPeriod === "current" && (
+                            <div className="mt-3 flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                onClick={() =>
+                                  openEditDialog(entry as Contribution)
+                                }
+                              >
+                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                className="h-8"
+                                onClick={() =>
+                                  handleDeleteContribution(
+                                    entry as Contribution,
+                                  )
+                                }
+                              >
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                Delete
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        {isAdmin && selectedPeriod === "current" && (
-                          <div className="mt-3 flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8"
-                              onClick={() => openEditDialog(contribution)}
-                            >
-                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              className="h-8"
-                              onClick={() =>
-                                handleDeleteContribution(contribution)
-                              }
-                            >
-                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                              Delete
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+                      );
+                    },
+                  )
                 ) : (
                   <div className="p-8 text-center text-muted-foreground">
                     {isAdmin
                       ? "No contributions found."
-                      : "No personal contributions found."}
+                      : "No personal contribution or paid-expense history found."}
                   </div>
                 )}
               </div>
@@ -358,7 +471,7 @@ export default function ContributionHistoryPage() {
                 <Table className="min-w-[480px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Contributor</TableHead>
+                      <TableHead>{isAdmin ? "Contributor" : "Entry"}</TableHead>
                       <TableHead className="hidden sm:table-cell">
                         Date
                       </TableHead>
@@ -369,13 +482,34 @@ export default function ContributionHistoryPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visibleContributions.length > 0 ? (
-                      visibleContributions.map((contribution) => {
+                    {(
+                      isAdmin
+                        ? visibleContributions.length > 0
+                        : memberHistoryEntries.length > 0
+                    ) ? (
+                      (isAdmin
+                        ? visibleContributions
+                        : memberHistoryEntries
+                      ).map((entry) => {
                         const contributor = userMap.get(
-                          contribution.contributorId,
+                          isAdmin
+                            ? (entry as Contribution).contributorId
+                            : (entry as MemberHistoryEntry).actorId,
                         );
+                        const amount = isAdmin
+                          ? (entry as Contribution).amount
+                          : (entry as MemberHistoryEntry).amount;
+                        const date = isAdmin
+                          ? (entry as Contribution).date
+                          : (entry as MemberHistoryEntry).date;
+                        const source = isAdmin
+                          ? "wallet"
+                          : (entry as MemberHistoryEntry).source;
+                        const label = isAdmin
+                          ? "Wallet Contribution"
+                          : (entry as MemberHistoryEntry).label;
                         return (
-                          <TableRow key={contribution.id}>
+                          <TableRow key={entry.id}>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-8 w-8">
@@ -388,19 +522,35 @@ export default function ContributionHistoryPage() {
                                     {contributor?.name.charAt(0)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className="font-medium">
-                                  {contributor?.name}
-                                </span>
+                                <div>
+                                  <span className="font-medium">
+                                    {contributor?.name}
+                                  </span>
+                                  {!isAdmin && (
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px]"
+                                      >
+                                        {source === "wallet"
+                                          ? "Wallet"
+                                          : "Paid Expense"}
+                                      </Badge>
+                                      {source === "paid-expense" && (
+                                        <span className="text-xs text-muted-foreground">
+                                          {label}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="hidden sm:table-cell">
-                              {format(
-                                new Date(contribution.date),
-                                "dd/MM/yyyy",
-                              )}
+                              {format(new Date(date), "dd/MM/yyyy")}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency(contribution.amount)}
+                              {formatCurrency(amount)}
                             </TableCell>
                             {isAdmin && selectedPeriod === "current" && (
                               <TableCell className="text-right">
@@ -409,7 +559,9 @@ export default function ContributionHistoryPage() {
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => openEditDialog(contribution)}
+                                    onClick={() =>
+                                      openEditDialog(entry as Contribution)
+                                    }
                                   >
                                     <Pencil className="mr-1.5 h-3.5 w-3.5" />
                                     Edit
@@ -419,7 +571,9 @@ export default function ContributionHistoryPage() {
                                     size="sm"
                                     variant="destructive"
                                     onClick={() =>
-                                      handleDeleteContribution(contribution)
+                                      handleDeleteContribution(
+                                        entry as Contribution,
+                                      )
                                     }
                                   >
                                     <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -441,7 +595,7 @@ export default function ContributionHistoryPage() {
                         >
                           {isAdmin
                             ? "No contributions found."
-                            : "No personal contributions found."}
+                            : "No personal contribution or paid-expense history found."}
                         </TableCell>
                       </TableRow>
                     )}
