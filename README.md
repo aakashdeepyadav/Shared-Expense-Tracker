@@ -3,6 +3,10 @@
 Shared Expense Tracker is a group finance application built with Next.js and Firebase.
 It helps a household, team, or travel group track contributions, expenses, chat, reports, and monthly rollovers in one place.
 
+## Android APK Download
+
+- Latest APK (v1.1.1): https://github.com/aakashdeepyadav/Shared-Expense-Tracker/releases/download/v1.1.1/android_app.apk
+
 ## Highlights
 
 - Group-based setup flow with unique group ID.
