@@ -207,7 +207,7 @@ export default function DashboardPage() {
         onAddContribution={handleAddContribution}
         users={users}
       />
-      <div className="relative flex-1 min-h-0 overflow-y-auto bg-slate-50 p-4 dark:bg-slate-950 md:p-6 lg:p-8">
+      <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-slate-50 p-4 dark:bg-slate-950 md:p-6 lg:p-8">
         <div
           className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
           style={dotPatternLight}
@@ -216,7 +216,7 @@ export default function DashboardPage() {
           className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
           style={dotPatternDark}
         />
-        <div className="mx-auto w-full max-w-7xl space-y-6 animate-fade-up">
+        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 animate-fade-up">
           <Card className="modern-surface border-0 overflow-hidden">
             <CardContent className="relative p-5 md:p-6">
               <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                     recent activity from one place.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
                   <Badge variant="secondary" className="rounded-full px-3 py-1">
                     {isAdmin ? "Admin View" : "Member View"}
                   </Badge>
