@@ -57,6 +57,16 @@ export function OverviewCards({ expenses, contributions }: OverviewCardsProps) {
   const expensePerMember =
     totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
 
+  const myExpenseShare = currentUser
+    ? expenses.reduce((sum, expense) => {
+        const participantEntry = expense.participants.find(
+          (participant) => participant.userId === currentUser.id,
+        );
+        if (!participantEntry) return sum;
+        return sum + participantEntry.share;
+      }, 0)
+    : 0;
+
   const walletStatusLabel =
     walletBalance >= 0 ? "Healthy wallet" : "Deficit alert";
 
@@ -77,23 +87,23 @@ export function OverviewCards({ expenses, contributions }: OverviewCardsProps) {
       positive: walletBalance >= 0,
     },
     {
-      title: "Expense per Member",
-      value: formatCurrency(expensePerMember),
-      detail: "Average individual burden",
+      title: isAdmin ? "Expense per Member" : "Your Expense",
+      value: formatCurrency(isAdmin ? expensePerMember : myExpenseShare),
+      detail: isAdmin
+        ? "Average individual burden"
+        : "Your share across participated expenses",
       icon: Users,
       positive: true,
     },
   ];
 
-  if (!isAdmin) {
-    cards.push({
-      title: "My Contributions",
-      value: formatCurrency(myContributions),
-      detail: "Wallet top-ups + personally paid expenses",
-      icon: PiggyBank,
-      positive: true,
-    });
-  }
+  cards.push({
+    title: "My Contributions",
+    value: formatCurrency(myContributions),
+    detail: "Wallet top-ups + personally paid expenses",
+    icon: PiggyBank,
+    positive: true,
+  });
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

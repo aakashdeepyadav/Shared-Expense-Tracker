@@ -117,10 +117,6 @@ function buildClientReport(
   });
 
   expenses.forEach((expense) => {
-    const participantCount = expense.participants.length;
-    const normalizedShare =
-      participantCount > 0 ? expense.amount / participantCount : 0;
-
     if (expense.payerId !== WALLET_PAYER_ID) {
       const payer = memberBalances.get(expense.payerId);
       if (payer) {
@@ -130,17 +126,21 @@ function buildClientReport(
     expense.participants.forEach((participant) => {
       const entry = memberBalances.get(participant.userId);
       if (entry) {
-        entry.share += normalizedShare;
+        entry.share += participant.share;
       }
     });
   });
 
-  const totalParticipantSlots = expenses.reduce(
-    (sum, expense) => sum + expense.participants.length,
-    0,
-  );
+  const totalParticipantSlots = expenses.reduce((sum, expense) => {
+    return sum + expense.participants.length;
+  }, 0);
+  const totalParticipantExpenseShare = Array.from(
+    memberBalances.values(),
+  ).reduce((sum, balance) => sum + balance.share, 0);
   const expensePerMember =
-    totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
+    totalParticipantSlots > 0
+      ? totalParticipantExpenseShare / totalParticipantSlots
+      : 0;
 
   const memberRows = users
     .map((user) => {

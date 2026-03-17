@@ -124,9 +124,6 @@ const generateReportFlow = ai.defineFlow(
     });
 
     typedExpenses.forEach(e => {
-      const participantCount = e.participants.length;
-      const normalizedShare = participantCount > 0 ? e.amount / participantCount : 0;
-
         // Only credit the expense to a member if they paid for it personally, not from the wallet
         if (e.payerId !== WALLET_PAYER_ID) {
              const payerBalance = memberBalances.get(e.payerId);
@@ -138,7 +135,7 @@ const generateReportFlow = ai.defineFlow(
         e.participants.forEach(p => {
             const participantBalance = memberBalances.get(p.userId);
             if (participantBalance) {
-                participantBalance.share += normalizedShare;
+                participantBalance.share += p.share;
             }
         });
     });
@@ -147,8 +144,12 @@ const generateReportFlow = ai.defineFlow(
       (sum, expense) => sum + expense.participants.length,
       0,
     );
+    const totalParticipantExpenseShare = Array.from(memberBalances.values())
+      .reduce((sum, balance) => sum + balance.share, 0);
     const expensePerMember =
-      totalParticipantSlots > 0 ? totalExpenses / totalParticipantSlots : 0;
+      totalParticipantSlots > 0
+        ? totalParticipantExpenseShare / totalParticipantSlots
+        : 0;
 
     const memberContributions = typedUsers.map(user => {
       const balance = memberBalances.get(user.id) || { paid: 0, share: 0, contributed: 0 };

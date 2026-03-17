@@ -12,7 +12,7 @@ import type { ChatMessage } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
@@ -171,11 +171,20 @@ export default function ChatPage() {
               />
               <Button
                 type="submit"
-                size="icon"
                 disabled={isSending || newMessage.trim() === ""}
-                className="h-9 w-9 rounded-lg"
+                className="h-11 min-w-[2.75rem] rounded-lg px-3 font-semibold shadow-sm"
               >
-                <Send className="h-4 w-4" />
+                {isSending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="hidden sm:inline ml-2">Sending</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">Send</span>
+                  </>
+                )}
               </Button>
             </form>
           </div>
