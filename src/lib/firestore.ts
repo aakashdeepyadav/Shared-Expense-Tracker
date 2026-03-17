@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   addDoc,
+  deleteDoc,
   updateDoc,
   query,
   orderBy,
@@ -619,6 +620,34 @@ export async function updateUserCredential(userId: string, newCredential: string
   }
 }
 
+export async function updateGroupImageUrl(imageUrl: string): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  const normalizedImageUrl = imageUrl.trim();
+  const nowIso = new Date().toISOString();
+
+  const appConfigRef = groupConfigDoc(resolvedGroupId, 'app');
+  const groupRootRef = groupRootDoc(resolvedGroupId);
+
+  const payload = {
+    groupImageUrl: normalizedImageUrl || null,
+    updatedAt: nowIso,
+  };
+
+  try {
+    await Promise.all([updateDoc(appConfigRef, payload), updateDoc(groupRootRef, payload)]);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: `groups/${resolvedGroupId}/config/app + groups/${resolvedGroupId}`,
+      operation: 'update',
+      requestResourceData: {
+        groupImageUrl: normalizedImageUrl ? 'SET' : null,
+      },
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
 export async function updateUserPhoneNumber(userId: string, phoneNumber: string): Promise<void> {
   const resolvedGroupId = resolveGroupId();
   if (!userId) throw new Error('User ID is required.');
@@ -824,6 +853,73 @@ export async function addExpense(expenseData: Omit<Expense, 'id' | 'date'> & { d
   }
 }
 
+export async function updateExpense(
+  expenseId: string,
+  updates: Partial<Omit<Expense, 'id' | 'date'>> & { date?: Date },
+): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  if (!expenseId) {
+    throw new Error('Expense ID is required.');
+  }
+
+  const expenseRef = doc(db, 'groups', resolvedGroupId, 'expenses', expenseId);
+  const payload: Record<string, unknown> = { ...updates };
+
+  if (updates.date) {
+    payload.date = Timestamp.fromDate(updates.date);
+  }
+
+  if (typeof updates.amount === 'number' && updates.amount <= 0) {
+    throw new Error('Amount must be greater than 0.');
+  }
+
+  if (typeof updates.amount === 'number' && !updates.participants) {
+    const existingSnapshot = await getDoc(expenseRef);
+    if (existingSnapshot.exists()) {
+      const existingExpense = existingSnapshot.data() as Expense;
+      const existingParticipants = existingExpense.participants || [];
+      if (existingParticipants.length > 0) {
+        const recomputedShare = updates.amount / existingParticipants.length;
+        payload.participants = existingParticipants.map((participant) => ({
+          ...participant,
+          share: recomputedShare,
+        }));
+      }
+    }
+  }
+
+  try {
+    await updateDoc(expenseRef, payload);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: expenseRef.path,
+      operation: 'update',
+      requestResourceData: payload,
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function deleteExpense(expenseId: string): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  if (!expenseId) {
+    throw new Error('Expense ID is required.');
+  }
+
+  const expenseRef = doc(db, 'groups', resolvedGroupId, 'expenses', expenseId);
+  try {
+    await deleteDoc(expenseRef);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: expenseRef.path,
+      operation: 'delete',
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
 // --- Contribution Functions ---
 export function subscribeToContributions(
   count: number,
@@ -885,6 +981,70 @@ export async function addContribution(
       path: contributionCol.path,
       operation: 'create',
       requestResourceData: dataToSave,
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function updateContribution(
+  contributionId: string,
+  updates: Partial<Omit<Contribution, 'id' | 'date'>> & { date?: Date },
+): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  if (!contributionId) {
+    throw new Error('Contribution ID is required.');
+  }
+
+  if (typeof updates.amount === 'number' && updates.amount <= 0) {
+    throw new Error('Amount must be greater than 0.');
+  }
+
+  const contributionRef = doc(
+    db,
+    'groups',
+    resolvedGroupId,
+    'contributions',
+    contributionId,
+  );
+  const payload: Record<string, unknown> = { ...updates };
+
+  if (updates.date) {
+    payload.date = Timestamp.fromDate(updates.date);
+  }
+
+  try {
+    await updateDoc(contributionRef, payload);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: contributionRef.path,
+      operation: 'update',
+      requestResourceData: payload,
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function deleteContribution(contributionId: string): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  if (!contributionId) {
+    throw new Error('Contribution ID is required.');
+  }
+
+  const contributionRef = doc(
+    db,
+    'groups',
+    resolvedGroupId,
+    'contributions',
+    contributionId,
+  );
+  try {
+    await deleteDoc(contributionRef);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: contributionRef.path,
+      operation: 'delete',
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;

@@ -84,8 +84,10 @@ function buildClientReport(
     0,
   );
   const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
-  const walletBalance = totalContributions - totalExpenses;
-  const expensePerMember = users.length > 0 ? totalExpenses / users.length : 0;
+  const walletExpenses = expenses
+    .filter((expense) => expense.payerId === WALLET_PAYER_ID)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const walletBalance = totalContributions - walletExpenses;
 
   const breakdownMap = new Map<string, number>();
   expenses.forEach((expense) => {
@@ -115,6 +117,10 @@ function buildClientReport(
   });
 
   expenses.forEach((expense) => {
+    const participantCount = expense.participants.length;
+    const normalizedShare =
+      participantCount > 0 ? expense.amount / participantCount : 0;
+
     if (expense.payerId !== WALLET_PAYER_ID) {
       const payer = memberBalances.get(expense.payerId);
       if (payer) {
@@ -124,10 +130,16 @@ function buildClientReport(
     expense.participants.forEach((participant) => {
       const entry = memberBalances.get(participant.userId);
       if (entry) {
-        entry.share += participant.share;
+        entry.share += normalizedShare;
       }
     });
   });
+
+  const totalParticipantExpenseShare = Array.from(
+    memberBalances.values(),
+  ).reduce((sum, balance) => sum + balance.share, 0);
+  const expensePerMember =
+    users.length > 0 ? totalParticipantExpenseShare / users.length : 0;
 
   const memberRows = users
     .map((user) => {

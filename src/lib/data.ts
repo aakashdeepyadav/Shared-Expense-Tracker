@@ -4,7 +4,19 @@ import type { User, Expense, Contribution } from './types';
 // This file now only contains data that is truly static or used for seeding.
 // The main data is now fetched from Firestore.
 
-export const predefinedTags = ['grocery', 'sabzi', 'cook', 'fast food', 'dinner', 'room rent', 'electricity'];
+export const predefinedTags = [
+  'grocery',
+  'sabzi',
+  'cook',
+  'fast food',
+  'dinner',
+  'room rent',
+  'electricity',
+  'fruits',
+  'milk',
+  'eggs',
+  'store',
+];
 
 // The following data is for seeding purposes only.
 export const users: User[] = [

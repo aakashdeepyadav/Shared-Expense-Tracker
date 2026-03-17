@@ -15,10 +15,13 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import {
+  addAdminAuditLog,
+  deleteExpense,
   getMonthArchiveById,
   getMonthArchives,
   subscribeToExpenses,
   subscribeToUsers,
+  updateExpense,
 } from "@/lib/firestore";
 import type { Expense, MonthArchiveSummary, User } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
@@ -33,6 +36,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Pencil, Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 20;
 const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
@@ -40,6 +55,7 @@ const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
 export default function ExpenseHistoryPage() {
   const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +68,12 @@ export default function ExpenseHistoryPage() {
     MonthArchiveSummary[]
   >([]);
   const [selectedPeriod, setSelectedPeriod] = useState("current");
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editPayerId, setEditPayerId] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -117,6 +139,98 @@ export default function ExpenseHistoryPage() {
       },
       lastExpense,
     );
+  };
+
+  const openEditDialog = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditDescription(expense.description);
+    setEditAmount(String(expense.amount));
+    setEditPayerId(expense.payerId);
+    setEditDate(format(new Date(expense.date), "yyyy-MM-dd"));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExpense) return;
+
+    const amount = Number(editAmount);
+    if (!editDescription.trim() || Number.isNaN(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Invalid expense data",
+        description: "Description and a positive amount are required.",
+      });
+      return;
+    }
+
+    if (!editPayerId) {
+      toast({
+        variant: "destructive",
+        title: "Select payer",
+        description: "Please select who paid this expense.",
+      });
+      return;
+    }
+
+    const parsedDate = new Date(editDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      toast({
+        variant: "destructive",
+        title: "Invalid date",
+        description: "Please select a valid date.",
+      });
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await updateExpense(editingExpense.id, {
+        description: editDescription.trim(),
+        amount,
+        payerId: editPayerId,
+        date: parsedDate,
+      });
+      await addAdminAuditLog({
+        action: "expense.update",
+        metadata: { expenseId: editingExpense.id, amount },
+      });
+      toast({
+        title: "Expense updated",
+        description: "Expense changes saved successfully.",
+      });
+      setEditingExpense(null);
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description:
+          error instanceof Error ? error.message : "Could not update expense.",
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expense: Expense) => {
+    const shouldDelete = window.confirm(
+      `Delete expense \"${expense.description}\"? This cannot be undone.`,
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await deleteExpense(expense.id);
+      await addAdminAuditLog({
+        action: "expense.delete",
+        metadata: { expenseId: expense.id, amount: expense.amount },
+      });
+      toast({ title: "Expense deleted" });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description:
+          error instanceof Error ? error.message : "Could not delete expense.",
+      });
+    }
   };
 
   const userMap = new Map(users.map((user) => [user.id, user]));
@@ -232,6 +346,30 @@ export default function ExpenseHistoryPage() {
                             </Badge>
                           )}
                         </div>
+                        {isAdmin && selectedPeriod === "current" && (
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => openEditDialog(expense)}
+                            >
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              className="h-8"
+                              onClick={() => handleDeleteExpense(expense)}
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -254,6 +392,9 @@ export default function ExpenseHistoryPage() {
                         Date
                       </TableHead>
                       <TableHead className="text-right">Amount</TableHead>
+                      {isAdmin && selectedPeriod === "current" && (
+                        <TableHead className="text-right">Actions</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -314,13 +455,39 @@ export default function ExpenseHistoryPage() {
                             <TableCell className="text-right">
                               {formatCurrency(expense.amount)}
                             </TableCell>
+                            {isAdmin && selectedPeriod === "current" && (
+                              <TableCell className="text-right">
+                                <div className="inline-flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openEditDialog(expense)}
+                                  >
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteExpense(expense)}
+                                  >
+                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })
                     ) : (
                       <TableRow>
                         <TableCell
-                          colSpan={4}
+                          colSpan={
+                            isAdmin && selectedPeriod === "current" ? 5 : 4
+                          }
                           className="text-center text-muted-foreground py-8"
                         >
                           {isAdmin
@@ -346,6 +513,90 @@ export default function ExpenseHistoryPage() {
             )}
           </Card>
         </div>
+
+        <Dialog
+          open={Boolean(editingExpense)}
+          onOpenChange={(open) => {
+            if (!open) setEditingExpense(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Edit Expense</DialogTitle>
+              <DialogDescription>
+                Admin can modify or delete any current-month expense.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-expense-description">Description</Label>
+                <Input
+                  id="edit-expense-description"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-expense-amount">Amount</Label>
+                  <Input
+                    id="edit-expense-amount"
+                    type="number"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-expense-date">Date</Label>
+                  <Input
+                    id="edit-expense-date"
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Paid by</Label>
+                <Select value={editPayerId} onValueChange={setEditPayerId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={WALLET_PAYER_ID}>Wallet</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingExpense(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

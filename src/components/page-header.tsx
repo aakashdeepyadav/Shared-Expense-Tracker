@@ -51,8 +51,8 @@ export function PageHeader({
   const canAddContribution = !!onAddContribution;
 
   return (
-    <header className="page-header-safe sticky top-0 z-30 shrink-0 px-2 pt-2 animate-fade-up md:px-4 md:pt-3">
-      <div className="mx-auto flex h-16 w-full items-center gap-3 rounded-2xl border border-white/45 bg-white/75 px-3 shadow-md backdrop-blur-md md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/70">
+    <header className="page-header-safe sticky top-0 z-30 shrink-0 pt-2 animate-fade-up md:pt-3">
+      <div className="mx-auto flex h-16 min-w-0 w-full items-center gap-2 overflow-hidden rounded-2xl border border-white/45 bg-white/75 px-2.5 shadow-md backdrop-blur-md md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/70">
         <div className="md:hidden">
           <SidebarTrigger />
         </div>
@@ -62,12 +62,12 @@ export function PageHeader({
             SET
           </span>
         </div>
-        <h1 className="flex-1 text-base font-semibold tracking-tight md:text-xl">
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight md:text-xl">
           {pageTitle}
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-1 sm:gap-2">
           {isAdmin && pathname === "/" && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {canAddContribution && (
                 <ContributionDialog
                   open={isContributionOpen}
@@ -77,7 +77,7 @@ export function PageHeader({
                 >
                   <Button
                     size="sm"
-                    className="shadow-sm transition-transform hover:-translate-y-0.5"
+                    className="h-8 w-8 p-0 shadow-sm transition-transform hover:-translate-y-0.5 sm:h-9 sm:w-auto sm:px-3"
                     onClick={() => setIsContributionOpen(true)}
                   >
                     <Wallet className="sm:mr-2" />
@@ -96,7 +96,7 @@ export function PageHeader({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-white/50 bg-white/80 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-white dark:border-white/15 dark:bg-slate-800/60 dark:hover:bg-slate-800"
+                    className="h-8 w-8 p-0 border-white/50 bg-white/80 shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-white sm:h-9 sm:w-auto sm:px-3 dark:border-white/15 dark:bg-slate-800/60 dark:hover:bg-slate-800"
                     onClick={() => setIsExpenseOpen(true)}
                   >
                     <Plus className="sm:mr-2" />

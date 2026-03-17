@@ -14,10 +14,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import {
+  addAdminAuditLog,
+  deleteContribution,
   getMonthArchiveById,
   getMonthArchives,
   subscribeToContributions,
   subscribeToUsers,
+  updateContribution,
 } from "@/lib/firestore";
 import type { Contribution, MonthArchiveSummary, User } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
@@ -32,12 +35,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Pencil, Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
 export default function ContributionHistoryPage() {
   const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +66,12 @@ export default function ContributionHistoryPage() {
     MonthArchiveSummary[]
   >([]);
   const [selectedPeriod, setSelectedPeriod] = useState("current");
+  const [editingContribution, setEditingContribution] =
+    useState<Contribution | null>(null);
+  const [editContributorId, setEditContributorId] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!isAuthLoading && !isAppConfigured) {
@@ -118,6 +140,94 @@ export default function ContributionHistoryPage() {
       },
       lastContribution,
     );
+  };
+
+  const openEditDialog = (contribution: Contribution) => {
+    setEditingContribution(contribution);
+    setEditContributorId(contribution.contributorId);
+    setEditAmount(String(contribution.amount));
+    setEditDate(format(new Date(contribution.date), "yyyy-MM-dd"));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingContribution) return;
+
+    const amount = Number(editAmount);
+    if (!editContributorId || Number.isNaN(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Invalid contribution data",
+        description: "Contributor and positive amount are required.",
+      });
+      return;
+    }
+
+    const parsedDate = new Date(editDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      toast({
+        variant: "destructive",
+        title: "Invalid date",
+        description: "Please select a valid date.",
+      });
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await updateContribution(editingContribution.id, {
+        contributorId: editContributorId,
+        amount,
+        date: parsedDate,
+      });
+      await addAdminAuditLog({
+        action: "contribution.update",
+        metadata: { contributionId: editingContribution.id, amount },
+      });
+      toast({
+        title: "Contribution updated",
+        description: "Contribution changes saved successfully.",
+      });
+      setEditingContribution(null);
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Could not update contribution.",
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteContribution = async (contribution: Contribution) => {
+    const shouldDelete = window.confirm(
+      "Delete this contribution? This cannot be undone.",
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await deleteContribution(contribution.id);
+      await addAdminAuditLog({
+        action: "contribution.delete",
+        metadata: {
+          contributionId: contribution.id,
+          amount: contribution.amount,
+        },
+      });
+      toast({ title: "Contribution deleted" });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Could not delete contribution.",
+      });
+    }
   };
 
   const userMap = new Map(users.map((user) => [user.id, user]));
@@ -206,6 +316,32 @@ export default function ContributionHistoryPage() {
                             {formatCurrency(contribution.amount)}
                           </p>
                         </div>
+                        {isAdmin && selectedPeriod === "current" && (
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() => openEditDialog(contribution)}
+                            >
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              className="h-8"
+                              onClick={() =>
+                                handleDeleteContribution(contribution)
+                              }
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -227,6 +363,9 @@ export default function ContributionHistoryPage() {
                         Date
                       </TableHead>
                       <TableHead className="text-right">Amount</TableHead>
+                      {isAdmin && selectedPeriod === "current" && (
+                        <TableHead className="text-right">Actions</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -263,13 +402,41 @@ export default function ContributionHistoryPage() {
                             <TableCell className="text-right">
                               {formatCurrency(contribution.amount)}
                             </TableCell>
+                            {isAdmin && selectedPeriod === "current" && (
+                              <TableCell className="text-right">
+                                <div className="inline-flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openEditDialog(contribution)}
+                                  >
+                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() =>
+                                      handleDeleteContribution(contribution)
+                                    }
+                                  >
+                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })
                     ) : (
                       <TableRow>
                         <TableCell
-                          colSpan={3}
+                          colSpan={
+                            isAdmin && selectedPeriod === "current" ? 4 : 3
+                          }
                           className="text-center text-muted-foreground py-8"
                         >
                           {isAdmin
@@ -295,6 +462,83 @@ export default function ContributionHistoryPage() {
             )}
           </Card>
         </div>
+
+        <Dialog
+          open={Boolean(editingContribution)}
+          onOpenChange={(open) => {
+            if (!open) setEditingContribution(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Edit Contribution</DialogTitle>
+              <DialogDescription>
+                Admin can modify or delete any current-month contribution.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Contributor</Label>
+                <Select
+                  value={editContributorId}
+                  onValueChange={setEditContributorId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select contributor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contribution-amount">Amount</Label>
+                  <Input
+                    id="edit-contribution-amount"
+                    type="number"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contribution-date">Date</Label>
+                  <Input
+                    id="edit-contribution-date"
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingContribution(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

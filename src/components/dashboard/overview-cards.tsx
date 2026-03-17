@@ -11,6 +11,8 @@ import type { Expense, Contribution, User } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 
+const WALLET_PAYER_ID = "shared-expense-tracker-wallet";
+
 type OverviewCardsProps = {
   expenses: Expense[];
   contributions: Contribution[];
@@ -31,13 +33,49 @@ export function OverviewCards({
     0,
   );
 
-  const myContributions = contributions
+  const walletExpenses = expenses
+    .filter((expense) => expense.payerId === WALLET_PAYER_ID)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+
+  const myWalletContributions = contributions
     .filter((c) => c.contributorId === currentUser?.id)
     .reduce((sum, c) => sum + c.amount, 0);
 
-  const walletBalance = totalContributions - totalExpenses;
+  const myPaidExpenses = expenses
+    .filter(
+      (expense) =>
+        expense.payerId !== WALLET_PAYER_ID &&
+        expense.payerId === currentUser?.id,
+    )
+    .reduce((sum, expense) => sum + expense.amount, 0);
 
-  const expensePerMember = users.length > 0 ? totalExpenses / users.length : 0;
+  const myContributions = myWalletContributions + myPaidExpenses;
+
+  const walletBalance = totalContributions - walletExpenses;
+
+  const memberExpenseShareTotals = new Map<string, number>();
+  users.forEach((user) => memberExpenseShareTotals.set(user.id, 0));
+
+  expenses.forEach((expense) => {
+    const participantCount = expense.participants.length;
+    if (participantCount === 0) return;
+
+    const normalizedShare = expense.amount / participantCount;
+    expense.participants.forEach((participant) => {
+      const current = memberExpenseShareTotals.get(participant.userId) || 0;
+      memberExpenseShareTotals.set(
+        participant.userId,
+        current + normalizedShare,
+      );
+    });
+  });
+
+  const totalParticipantExpenseShares = Array.from(
+    memberExpenseShareTotals.values(),
+  ).reduce((sum, value) => sum + value, 0);
+
+  const expensePerMember =
+    users.length > 0 ? totalParticipantExpenseShares / users.length : 0;
 
   const walletStatusLabel =
     walletBalance >= 0 ? "Healthy wallet" : "Deficit alert";
@@ -71,7 +109,7 @@ export function OverviewCards({
     cards.push({
       title: "My Contributions",
       value: formatCurrency(myContributions),
-      detail: "Added to shared wallet",
+      detail: "Wallet top-ups + personally paid expenses",
       icon: PiggyBank,
       positive: true,
     });

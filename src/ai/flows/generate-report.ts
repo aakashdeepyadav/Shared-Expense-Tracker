@@ -98,8 +98,10 @@ const generateReportFlow = ai.defineFlow(
 
     const totalContributions = typedContributions.reduce((acc, c) => acc + c.amount, 0);
     const totalExpenses = typedExpenses.reduce((acc, e) => acc + e.amount, 0);
-    const walletBalance = totalContributions - totalExpenses;
-    const expensePerMember = typedUsers.length > 0 ? totalExpenses / typedUsers.length : 0;
+    const walletExpenses = typedExpenses
+      .filter((expense) => expense.payerId === WALLET_PAYER_ID)
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    const walletBalance = totalContributions - walletExpenses;
     
     // Correct way to calculate expense breakdown by tag
     const breakdownMap = new Map<string, number>();
@@ -122,6 +124,9 @@ const generateReportFlow = ai.defineFlow(
     });
 
     typedExpenses.forEach(e => {
+      const participantCount = e.participants.length;
+      const normalizedShare = participantCount > 0 ? e.amount / participantCount : 0;
+
         // Only credit the expense to a member if they paid for it personally, not from the wallet
         if (e.payerId !== WALLET_PAYER_ID) {
              const payerBalance = memberBalances.get(e.payerId);
@@ -133,10 +138,15 @@ const generateReportFlow = ai.defineFlow(
         e.participants.forEach(p => {
             const participantBalance = memberBalances.get(p.userId);
             if (participantBalance) {
-                participantBalance.share += p.share;
+                participantBalance.share += normalizedShare;
             }
         });
     });
+
+    const totalParticipantExpenseShare = Array.from(memberBalances.values())
+      .reduce((sum, balance) => sum + balance.share, 0);
+    const expensePerMember =
+      typedUsers.length > 0 ? totalParticipantExpenseShare / typedUsers.length : 0;
 
     const memberContributions = typedUsers.map(user => {
       const balance = memberBalances.get(user.id) || { paid: 0, share: 0, contributed: 0 };

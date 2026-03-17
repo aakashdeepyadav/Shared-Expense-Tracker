@@ -78,6 +78,7 @@ export function ExpenseDialog({
 }: ExpenseDialogProps) {
   const { toast } = useToast();
   const [customTag, setCustomTag] = useState("");
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   const defaultValues = React.useMemo(
     () => ({
@@ -100,6 +101,7 @@ export function ExpenseDialog({
   React.useEffect(() => {
     if (open) {
       form.reset(defaultValues);
+      setIsDatePickerOpen(false);
     }
   }, [open, defaultValues, form]);
 
@@ -288,10 +290,14 @@ export function ExpenseDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Date of Expense</FormLabel>
-                  <Popover>
+                  <Popover
+                    open={isDatePickerOpen}
+                    onOpenChange={setIsDatePickerOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
+                          type="button"
                           variant="outline"
                           className={cn(
                             "pl-3 text-left font-normal",
@@ -311,7 +317,11 @@ export function ExpenseDialog({
                       <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(date) => {
+                          if (!date) return;
+                          field.onChange(date);
+                          setIsDatePickerOpen(false);
+                        }}
                         initialFocus
                       />
                     </PopoverContent>

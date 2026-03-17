@@ -19,6 +19,7 @@ import { Loader2, ShieldAlert } from "lucide-react";
 import {
   addAdminAuditLog,
   rolloverMonthWithArchive,
+  updateGroupImageUrl,
   updateSharedMemberPin,
   updateUserProfile,
   updateUserPhoneNumber,
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import type { User } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function SettingsPage() {
   const {
@@ -53,6 +55,8 @@ export default function SettingsPage() {
     updateUserCredential,
     isAuthLoading,
     isAppConfigured,
+    appConfig,
+    refreshAppSetup,
     users,
     isDataLoading,
   } = useAuth();
@@ -72,6 +76,8 @@ export default function SettingsPage() {
     (currentUser?.phoneNumber || "").replace(/^\+91/, ""),
   );
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [groupImageUrl, setGroupImageUrl] = useState("");
+  const [isUpdatingGroupImage, setIsUpdatingGroupImage] = useState(false);
 
   // State for admin phone number change
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -93,6 +99,10 @@ export default function SettingsPage() {
     setProfileName(currentUser?.name || "");
     setProfilePhone((currentUser?.phoneNumber || "").replace(/^\+91/, ""));
   }, [currentUser]);
+
+  useEffect(() => {
+    setGroupImageUrl(appConfig?.groupImageUrl || "");
+  }, [appConfig?.groupImageUrl]);
 
   if (isAuthLoading || !currentUser) {
     return <SettingsShimmer />;
@@ -286,6 +296,44 @@ export default function SettingsPage() {
     setIsUpdatingPhone(false);
   };
 
+  const handleUpdateGroupImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const trimmedImageUrl = groupImageUrl.trim();
+    if (trimmedImageUrl && !/^https?:\/\//i.test(trimmedImageUrl)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid image URL",
+        description: "Use a valid http:// or https:// image URL.",
+      });
+      return;
+    }
+
+    setIsUpdatingGroupImage(true);
+    try {
+      await updateGroupImageUrl(trimmedImageUrl);
+      await addAdminAuditLog({
+        action: "group.image.update",
+        metadata: { hasImage: Boolean(trimmedImageUrl) },
+      });
+      await refreshAppSetup();
+      toast({
+        title: "Group picture updated",
+        description: trimmedImageUrl
+          ? "Group picture is now visible across the app."
+          : "Group picture removed. Default logo will be shown.",
+      });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setIsUpdatingGroupImage(false);
+    }
+  };
+
   const handleStartNewMonth = async () => {
     if (!monthResetPassword.trim()) {
       toast({
@@ -361,6 +409,71 @@ export default function SettingsPage() {
 
           {isAdmin ? (
             <>
+              <Card className="modern-surface w-full border-0 animate-soft-pop">
+                <CardHeader>
+                  <CardTitle>Update Group Picture</CardTitle>
+                  <CardDescription>
+                    Set a public image URL to show as group logo in sidebar,
+                    dashboard, and login.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdateGroupImage} className="space-y-4">
+                    <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-background/70 p-3">
+                      <Avatar className="h-12 w-12 ring-1 ring-border/70">
+                        <AvatarImage
+                          src={groupImageUrl.trim() || appConfig?.groupImageUrl}
+                          alt={appConfig?.groupName || "Group"}
+                        />
+                        <AvatarFallback className="font-semibold">
+                          {(appConfig?.groupName || "G")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-sm text-muted-foreground">
+                        Live preview of the group logo.
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="group-image-url">Group picture URL</Label>
+                      <Input
+                        id="group-image-url"
+                        type="url"
+                        value={groupImageUrl}
+                        onChange={(e) => setGroupImageUrl(e.target.value)}
+                        placeholder="https://example.com/group-logo.png"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={isUpdatingGroupImage}
+                      >
+                        {isUpdatingGroupImage ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          "Save Group Picture"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setGroupImageUrl("")}
+                        disabled={isUpdatingGroupImage}
+                      >
+                        Clear Picture
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+
               <Card className="modern-surface w-full border-0 animate-soft-pop">
                 <CardHeader>
                   <CardTitle>Update Admin Password</CardTitle>

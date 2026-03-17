@@ -135,6 +135,11 @@ body {
     padding-right: env(safe-area-inset-right);
   }
 
+  .app-main > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .auth-main {
     min-height: 100dvh;
     padding-left: env(safe-area-inset-left);

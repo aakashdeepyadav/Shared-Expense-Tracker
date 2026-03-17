@@ -18,6 +18,7 @@ import {
 import { AlertCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -153,6 +154,7 @@ export default function LoginPage() {
   }
 
   const hasSelectedGroup = Boolean(isAppConfigured && activeGroupId);
+  const groupDisplayName = appConfig?.groupName || activeGroupId || "Group";
 
   return (
     <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
@@ -169,7 +171,19 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
       <Card className="isolate w-full max-w-md overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl">
         <CardHeader className="items-center border-b border-border/70 bg-muted/40 pb-4 pt-6 text-center">
-          <Logo className="mb-3 h-14 w-14" />
+          {appConfig?.groupImageUrl ? (
+            <Avatar className="mb-3 h-14 w-14 ring-1 ring-border/70">
+              <AvatarImage
+                src={appConfig.groupImageUrl}
+                alt={groupDisplayName}
+              />
+              <AvatarFallback className="text-base font-semibold">
+                {groupDisplayName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          ) : (
+            <Logo className="mb-3 h-14 w-14" />
+          )}
           <CardTitle className="text-3xl tracking-tight">Sign In</CardTitle>
           <CardDescription>
             {hasSelectedGroup
@@ -204,8 +218,19 @@ export default function LoginPage() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Active group
               </div>
-              <div className="mt-1 text-base font-semibold">
-                {appConfig?.groupName || activeGroupId}
+              <div className="mt-2 flex items-center gap-2">
+                <Avatar className="h-7 w-7 ring-1 ring-border/70">
+                  <AvatarImage
+                    src={appConfig?.groupImageUrl}
+                    alt={groupDisplayName}
+                  />
+                  <AvatarFallback className="text-[10px] font-semibold">
+                    {groupDisplayName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="text-base font-semibold">
+                  {groupDisplayName}
+                </div>
               </div>
               <div className="mt-1 text-muted-foreground">
                 ID: {activeGroupId}

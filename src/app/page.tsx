@@ -28,9 +28,11 @@ import { ContributionChart } from "@/components/dashboard/contribution-chart";
 import { DashboardShimmer } from "@/components/shimmers/dashboard-shimmer";
 import { CalendarDays } from "lucide-react";
 import { Logo } from "@/components/icons/logo";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function DashboardPage() {
-  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
+  const { currentUser, isAdmin, isAuthLoading, isAppConfigured, appConfig } =
+    useAuth();
   const router = useRouter();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -168,11 +170,6 @@ export default function DashboardPage() {
           (contribution) => contribution.contributorId === currentUser.id,
         );
 
-  const visibleUsers =
-    isAdmin || !currentUser
-      ? users
-      : users.filter((user) => user.id === currentUser.id);
-
   if (isAuthLoading) {
     return null;
   }
@@ -221,15 +218,27 @@ export default function DashboardPage() {
             <CardContent className="relative p-5 md:p-6">
               <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
               <div className="pointer-events-none absolute -left-6 -bottom-6 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
-              <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
-                    <Logo className="h-4 w-4" />
+              <div className="relative flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
+                    {appConfig?.groupImageUrl ? (
+                      <Avatar className="h-4 w-4 ring-1 ring-border/60">
+                        <AvatarImage
+                          src={appConfig.groupImageUrl}
+                          alt={appConfig.groupName || "Group"}
+                        />
+                        <AvatarFallback className="text-[9px]">
+                          {(appConfig.groupName || "G").charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Logo className="h-4 w-4" />
+                    )}
                     <span className="text-xs font-semibold tracking-[0.08em] uppercase text-muted-foreground">
                       Shared Expense
                     </span>
                   </div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground break-words">
                     Financial Command Center
                   </p>
                   <h2 className="mt-2 text-2xl font-headline font-semibold tracking-tight md:text-3xl">
@@ -237,12 +246,12 @@ export default function DashboardPage() {
                       ? `Welcome back, ${currentUser.name}`
                       : `Hello, ${currentUser.name}`}
                   </h2>
-                  <p className="mt-2 text-sm md:text-base text-muted-foreground max-w-2xl">
+                  <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
                     Track group spending, monitor wallet performance, and review
                     recent activity from one place.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
                   <Badge variant="secondary" className="rounded-full px-3 py-1">
                     {isAdmin ? "Admin View" : "Member View"}
                   </Badge>
@@ -259,27 +268,26 @@ export default function DashboardPage() {
           </Card>
 
           <OverviewCards
-            expenses={visibleExpenses}
-            contributions={visibleContributions}
-            users={visibleUsers}
+            expenses={expenses}
+            contributions={contributions}
+            users={users}
           />
           <div className="grid gap-6">
             <Card className="modern-surface border-0">
               <CardHeader className="pb-3">
                 <CardTitle className="text-xl tracking-tight">
-                  {isAdmin ? "Member Contributions" : "My Contributions"}
+                  Member Contributions
                 </CardTitle>
                 <CardDescription>
-                  {isAdmin
-                    ? "A visual breakdown of each member's total financial input (wallet contributions + expenses paid)."
-                    : "A visual summary of your wallet contributions and expenses paid."}
+                  A visual breakdown of each member&apos;s total financial input
+                  (wallet contributions + expenses paid).
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ContributionChart
-                  contributions={visibleContributions}
-                  users={visibleUsers}
-                  expenses={visibleExpenses}
+                  contributions={contributions}
+                  users={users}
+                  expenses={expenses}
                 />
               </CardContent>
             </Card>

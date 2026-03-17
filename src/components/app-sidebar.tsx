@@ -24,7 +24,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Logo } from "@/components/icons/logo";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "./ui/button";
 import { subscribeToMessages } from "@/lib/firestore";
@@ -63,13 +62,20 @@ export function AppSidebar() {
   }
 
   const appLabel = appConfig?.groupName || "Shared Expense";
+  const groupImageUrl = appConfig?.groupImageUrl;
+  const groupInitial = appLabel.charAt(0).toUpperCase();
 
   return (
     <Sidebar variant="floating" className="p-2 md:p-3">
       <SidebarHeader className="p-4 rounded-2xl border border-white/10 bg-sidebar/80 backdrop-blur-md">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Logo className="w-8 h-8" />
+            <Avatar className="h-8 w-8 ring-1 ring-white/20">
+              <AvatarImage src={groupImageUrl} alt={appLabel} />
+              <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs font-semibold">
+                {groupInitial}
+              </AvatarFallback>
+            </Avatar>
             <h1 className="font-headline text-lg font-bold truncate">
               {appLabel}
             </h1>
