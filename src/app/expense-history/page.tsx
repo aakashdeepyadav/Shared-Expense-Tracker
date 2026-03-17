@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Table,
@@ -252,6 +252,17 @@ export default function ExpenseHistoryPage() {
             ),
         );
 
+  const sortedVisibleExpenses = useMemo(
+    () =>
+      [...visibleExpenses].sort((a, b) => {
+        const timeDiff =
+          new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return b.id.localeCompare(a.id);
+      }),
+    [visibleExpenses],
+  );
+
   if (isLoading) {
     return (
       <HistoryShimmer
@@ -296,8 +307,8 @@ export default function ExpenseHistoryPage() {
           <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
             <CardContent className="p-0">
               <div className="md:hidden divide-y divide-border/60">
-                {visibleExpenses.length > 0 ? (
-                  visibleExpenses.map((expense) => {
+                {sortedVisibleExpenses.length > 0 ? (
+                  sortedVisibleExpenses.map((expense) => {
                     const payer = userMap.get(expense.payerId);
                     return (
                       <div key={expense.id} className="p-3">
@@ -398,8 +409,8 @@ export default function ExpenseHistoryPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visibleExpenses.length > 0 ? (
-                      visibleExpenses.map((expense) => {
+                    {sortedVisibleExpenses.length > 0 ? (
+                      sortedVisibleExpenses.map((expense) => {
                         const payer = userMap.get(expense.payerId);
                         return (
                           <TableRow key={expense.id}>

@@ -967,7 +967,7 @@ export function subscribeToContributions(
         return {
           id: entry.id,
           ...data,
-          date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
+          date: (data.date as Timestamp).toDate().toISOString(),
         } as Contribution;
       });
       callback(contributionList);
@@ -1233,7 +1233,7 @@ export async function getAllContributionsForReport(): Promise<Contribution[]> {
       return {
         id: entry.id,
         ...data,
-        date: (data.date as Timestamp).toDate().toISOString().split('T')[0],
+        date: (data.date as Timestamp).toDate().toISOString(),
       } as Contribution;
     });
   } catch (error) {

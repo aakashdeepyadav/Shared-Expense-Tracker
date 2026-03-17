@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -281,9 +281,20 @@ export default function ContributionHistoryPage() {
           (contribution) => contribution.contributorId === currentUser.id,
         );
 
+  const sortedVisibleContributions = useMemo(
+    () =>
+      [...visibleContributions].sort((a, b) => {
+        const timeDiff =
+          new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return b.id.localeCompare(a.id);
+      }),
+    [visibleContributions],
+  );
+
   const memberHistoryEntries: MemberHistoryEntry[] = currentUser
     ? [
-        ...visibleContributions.map((contribution) => ({
+        ...sortedVisibleContributions.map((contribution) => ({
           id: `wallet-${contribution.id}`,
           actorId: contribution.contributorId,
           amount: contribution.amount,
@@ -358,106 +369,105 @@ export default function ContributionHistoryPage() {
               <div className="md:hidden divide-y divide-border/60">
                 {(
                   isAdmin
-                    ? visibleContributions.length > 0
+                    ? sortedVisibleContributions.length > 0
                     : memberHistoryEntries.length > 0
                 ) ? (
-                  (isAdmin ? visibleContributions : memberHistoryEntries).map(
-                    (entry) => {
-                      const contributor = userMap.get(
-                        isAdmin
-                          ? (entry as Contribution).contributorId
-                          : (entry as MemberHistoryEntry).actorId,
-                      );
-                      const amount = isAdmin
-                        ? (entry as Contribution).amount
-                        : (entry as MemberHistoryEntry).amount;
-                      const date = isAdmin
-                        ? (entry as Contribution).date
-                        : (entry as MemberHistoryEntry).date;
-                      const source = isAdmin
-                        ? "wallet"
-                        : (entry as MemberHistoryEntry).source;
-                      const label = isAdmin
-                        ? "Wallet Contribution"
-                        : (entry as MemberHistoryEntry).label;
-                      return (
-                        <div key={entry.id} className="p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Avatar className="h-7 w-7">
-                                <AvatarImage
-                                  src={contributor?.avatarUrl}
-                                  alt={contributor?.name}
-                                  data-ai-hint="person portrait"
-                                />
-                                <AvatarFallback>
-                                  {contributor?.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">
-                                  {contributor?.name}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {format(new Date(date), "dd/MM/yyyy")}
-                                </p>
-                                {!isAdmin && (
-                                  <div className="mt-1 flex items-center gap-2">
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[10px]"
-                                    >
-                                      {source === "wallet"
-                                        ? "Wallet"
-                                        : "Paid Expense"}
-                                    </Badge>
-                                    {source === "paid-expense" && (
-                                      <span className="truncate text-[11px] text-muted-foreground">
-                                        {label}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                  (isAdmin
+                    ? sortedVisibleContributions
+                    : memberHistoryEntries
+                  ).map((entry) => {
+                    const contributor = userMap.get(
+                      isAdmin
+                        ? (entry as Contribution).contributorId
+                        : (entry as MemberHistoryEntry).actorId,
+                    );
+                    const amount = isAdmin
+                      ? (entry as Contribution).amount
+                      : (entry as MemberHistoryEntry).amount;
+                    const date = isAdmin
+                      ? (entry as Contribution).date
+                      : (entry as MemberHistoryEntry).date;
+                    const source = isAdmin
+                      ? "wallet"
+                      : (entry as MemberHistoryEntry).source;
+                    const label = isAdmin
+                      ? "Wallet Contribution"
+                      : (entry as MemberHistoryEntry).label;
+                    return (
+                      <div key={entry.id} className="p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7">
+                              <AvatarImage
+                                src={contributor?.avatarUrl}
+                                alt={contributor?.name}
+                                data-ai-hint="person portrait"
+                              />
+                              <AvatarFallback>
+                                {contributor?.name.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">
+                                {contributor?.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(date), "dd/MM/yyyy")}
+                              </p>
+                              {!isAdmin && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px]"
+                                  >
+                                    {source === "wallet"
+                                      ? "Wallet"
+                                      : "Paid Expense"}
+                                  </Badge>
+                                  {source === "paid-expense" && (
+                                    <span className="truncate text-[11px] text-muted-foreground">
+                                      {label}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <p className="text-sm font-semibold whitespace-nowrap">
-                              {formatCurrency(amount)}
-                            </p>
                           </div>
-                          {isAdmin && selectedPeriod === "current" && (
-                            <div className="mt-3 flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-8"
-                                onClick={() =>
-                                  openEditDialog(entry as Contribution)
-                                }
-                              >
-                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="destructive"
-                                className="h-8"
-                                onClick={() =>
-                                  handleDeleteContribution(
-                                    entry as Contribution,
-                                  )
-                                }
-                              >
-                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                Delete
-                              </Button>
-                            </div>
-                          )}
+                          <p className="text-sm font-semibold whitespace-nowrap">
+                            {formatCurrency(amount)}
+                          </p>
                         </div>
-                      );
-                    },
-                  )
+                        {isAdmin && selectedPeriod === "current" && (
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              onClick={() =>
+                                openEditDialog(entry as Contribution)
+                              }
+                            >
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              className="h-8"
+                              onClick={() =>
+                                handleDeleteContribution(entry as Contribution)
+                              }
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="p-8 text-center text-muted-foreground">
                     {isAdmin
@@ -484,11 +494,11 @@ export default function ContributionHistoryPage() {
                   <TableBody>
                     {(
                       isAdmin
-                        ? visibleContributions.length > 0
+                        ? sortedVisibleContributions.length > 0
                         : memberHistoryEntries.length > 0
                     ) ? (
                       (isAdmin
-                        ? visibleContributions
+                        ? sortedVisibleContributions
                         : memberHistoryEntries
                       ).map((entry) => {
                         const contributor = userMap.get(
