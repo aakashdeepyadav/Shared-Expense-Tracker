@@ -168,7 +168,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
       <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
       <Card className="isolate w-full max-w-md overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl">
-        <CardHeader className="items-center pb-2 text-center">
+        <CardHeader className="items-center border-b border-border/70 bg-muted/40 pb-4 pt-6 text-center">
           <Logo className="mb-3 h-14 w-14" />
           <CardTitle className="text-3xl tracking-tight">Sign In</CardTitle>
           <CardDescription>
@@ -177,30 +177,30 @@ export default function LoginPage() {
               : "Enter your group ID to continue"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-5">
           {!hasSelectedGroup ? (
             <div className="mb-5 space-y-2">
               <Label htmlFor="group-id-input">Group ID</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   id="group-id-input"
                   value={groupIdInput}
                   onChange={(e) => setGroupIdInput(e.target.value)}
-                  placeholder="e.g. flat-2-ab12cd"
+                  placeholder="e.g. home-1"
                   className="h-11"
                 />
                 <Button
                   variant="secondary"
                   onClick={() => handleSelectGroup(groupIdInput.trim())}
                   disabled={!groupIdInput.trim()}
-                  className="h-11"
+                  className="h-11 sm:px-5"
                 >
                   Join
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="mb-5 rounded-2xl border border-border/70 bg-muted p-4 text-sm">
+            <div className="mb-5 rounded-2xl border border-border/70 bg-muted p-4 text-sm shadow-sm">
               <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Active group
               </div>
@@ -266,21 +266,20 @@ export default function LoginPage() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Select your group first, then sign in with your name and PIN or
-                password.
-              </p>
-            </div>
+            <div className="space-y-3" />
           )}
         </CardContent>
-        <div className="border-t border-border/70 px-6 pb-6 pt-4">
+        <div className="border-t border-border/70 bg-muted/30 px-6 pb-6 pt-4">
           <div className="rounded-2xl border border-border/70 bg-muted p-3">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Quick Links
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {hasSelectedGroup ? (
+            <div
+              className={`grid grid-cols-1 gap-2 ${
+                hasSelectedGroup ? "sm:grid-cols-3" : "sm:grid-cols-2"
+              }`}
+            >
+              {hasSelectedGroup && (
                 <Button
                   variant="outline"
                   onClick={handleSwitchGroup}
@@ -288,8 +287,6 @@ export default function LoginPage() {
                 >
                   Switch Group
                 </Button>
-              ) : (
-                <div className="hidden sm:block" />
               )}
 
               <Button variant="outline" asChild className="h-10 text-sm">

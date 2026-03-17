@@ -43,6 +43,7 @@ function AppLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = React.useState(false);
+  const isLoginPage = pathname === "/login";
   const isAuthPage =
     pathname === "/login" || pathname === "/setup" || pathname === "/guide";
 
@@ -102,7 +103,8 @@ function AppLayout({
       (isAppConfigured &&
         !currentUser &&
         pathname !== "/login" &&
-        pathname !== "/setup"))
+        pathname !== "/setup" &&
+        pathname !== "/guide"))
   ) {
     return (
       <main className="flex min-h-screen w-full items-center justify-center">
@@ -115,8 +117,16 @@ function AppLayout({
     return (
       <>
         <OfflineBanner />
-        <main className="relative app-main min-h-screen">{children}</main>
-        <AppSignature />
+        <main
+          className={
+            isLoginPage
+              ? "relative auth-main min-h-screen overflow-hidden"
+              : "relative app-main min-h-screen"
+          }
+        >
+          {children}
+        </main>
+        {!isLoginPage && <AppSignature />}
         <Toaster />
         <FirebaseErrorListener />
       </>
