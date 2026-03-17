@@ -150,7 +150,7 @@ export default function ExpenseHistoryPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader />
-      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+      <main className="flex-1 overflow-y-auto p-3 pb-4 md:p-6 md:pb-6 lg:p-8">
         <div className="mx-auto w-full max-w-6xl animate-fade-up">
           <header className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
@@ -162,111 +162,184 @@ export default function ExpenseHistoryPage() {
                 : "Showing archived month expenses."}
             </p>
           </header>
-          <div className="mb-4 max-w-sm">
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select timeframe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current">Current Month</SelectItem>
-                {archiveSummaries.map((archive) => (
-                  <SelectItem key={archive.id} value={archive.id}>
-                    {archive.periodLabel}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="sticky top-2 z-20 mb-4">
+            <div className="w-full md:max-w-sm rounded-xl border border-border/60 bg-background/90 p-2 shadow-sm backdrop-blur">
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger className="h-11 w-full bg-background">
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current Month</SelectItem>
+                  {archiveSummaries.map((archive) => (
+                    <SelectItem key={archive.id} value={archive.id}>
+                      {archive.periodLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
-            <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[620px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Paid by</TableHead>
-                    <TableHead className="hidden md:table-cell">Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleExpenses.length > 0 ? (
-                    visibleExpenses.map((expense) => {
-                      const payer = userMap.get(expense.payerId);
-                      return (
-                        <TableRow key={expense.id}>
-                          <TableCell>
-                            <div className="font-medium">
+            <CardContent className="p-0">
+              <div className="md:hidden divide-y divide-border/60">
+                {visibleExpenses.length > 0 ? (
+                  visibleExpenses.map((expense) => {
+                    const payer = userMap.get(expense.payerId);
+                    return (
+                      <div key={expense.id} className="p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">
                               {expense.description}
-                            </div>
-                            <div className="text-sm text-muted-foreground sm:hidden flex flex-wrap gap-1 mt-1">
-                              {expense.tags &&
-                                expense.tags.map((tag) => (
-                                  <Badge
-                                    key={tag}
-                                    variant="outline"
-                                    className="text-xs"
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage
-                                  src={payer?.avatarUrl}
-                                  alt={payer?.name}
-                                  data-ai-hint="person portrait"
-                                />
-                                <AvatarFallback>
-                                  {payer?.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="hidden sm:flex flex-col gap-1.5">
-                                <span>{payer?.name}</span>
-                                <div className="text-sm text-muted-foreground flex flex-wrap gap-1">
-                                  {expense.tags &&
-                                    expense.tags.map((tag) => (
-                                      <Badge
-                                        key={tag}
-                                        variant="outline"
-                                        className="text-xs"
-                                      >
-                                        {tag}
-                                      </Badge>
-                                    ))}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(expense.date), "dd/MM/yyyy")}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold whitespace-nowrap">
+                            {formatCurrency(expense.amount)}
+                          </p>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage
+                              src={payer?.avatarUrl}
+                              alt={payer?.name}
+                              data-ai-hint="person portrait"
+                            />
+                            <AvatarFallback>
+                              {payer?.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm text-muted-foreground truncate">
+                            Paid by {payer?.name}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {expense.tags && expense.tags.length > 0 ? (
+                            expense.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="outline"
+                                className="text-[11px]"
+                              >
+                                {tag}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge variant="outline" className="text-[11px]">
+                              Uncategorized
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-muted-foreground">
+                    {isAdmin
+                      ? "No expenses found."
+                      : "No personal expenses found."}
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table className="min-w-[540px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Paid by</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Date
+                      </TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleExpenses.length > 0 ? (
+                      visibleExpenses.map((expense) => {
+                        const payer = userMap.get(expense.payerId);
+                        return (
+                          <TableRow key={expense.id}>
+                            <TableCell>
+                              <div className="font-medium max-w-[10rem] sm:max-w-none truncate">
+                                {expense.description}
+                              </div>
+                              <div className="text-sm text-muted-foreground sm:hidden flex flex-wrap gap-1 mt-1">
+                                {expense.tags &&
+                                  expense.tags.map((tag) => (
+                                    <Badge
+                                      key={tag}
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage
+                                    src={payer?.avatarUrl}
+                                    alt={payer?.name}
+                                    data-ai-hint="person portrait"
+                                  />
+                                  <AvatarFallback>
+                                    {payer?.name.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="hidden sm:flex flex-col gap-1.5">
+                                  <span>{payer?.name}</span>
+                                  <div className="text-sm text-muted-foreground flex flex-wrap gap-1">
+                                    {expense.tags &&
+                                      expense.tags.map((tag) => (
+                                        <Badge
+                                          key={tag}
+                                          variant="outline"
+                                          className="text-xs"
+                                        >
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {format(new Date(expense.date), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(expense.amount)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="text-center text-muted-foreground py-8"
-                      >
-                        {isAdmin
-                          ? "No expenses found."
-                          : "No personal expenses found."}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              {format(new Date(expense.date), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(expense.amount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="text-center text-muted-foreground py-8"
+                        >
+                          {isAdmin
+                            ? "No expenses found."
+                            : "No personal expenses found."}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
             {isAdmin && selectedPeriod === "current" && hasMore && (
               <CardFooter className="pt-6 justify-center">
-                <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                <Button
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="w-full sm:w-auto"
+                >
                   {isLoadingMore ? "Loading..." : "Load More"}
                 </Button>
               </CardFooter>

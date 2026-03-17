@@ -52,10 +52,14 @@ export function AppBottomNav() {
 
   return (
     <div
-      className="fixed bottom-3 left-3 right-3 z-30 md:hidden animate-soft-pop"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed bottom-0 left-0 right-0 z-30 md:hidden animate-soft-pop px-2 pb-2 pt-2"
+      style={{
+        paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+        paddingLeft: "calc(0.5rem + env(safe-area-inset-left))",
+        paddingRight: "calc(0.5rem + env(safe-area-inset-right))",
+      }}
     >
-      <nav className="modern-surface flex items-center justify-around h-16 rounded-2xl border border-white/40 px-1 shadow-xl dark:border-white/10">
+      <nav className="modern-surface flex items-center justify-around h-16 rounded-2xl border border-white/45 bg-white/88 px-1 shadow-xl backdrop-blur-md dark:border-white/10 dark:bg-slate-900/82">
         {navItems.map((item) => {
           const isActive =
             item.href === "/"

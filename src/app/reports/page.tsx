@@ -66,6 +66,8 @@ type GenerateReportOutput = {
   totalExpenses: number;
   walletBalance: number;
   expensePerMember: number;
+  generatedAt: string;
+  periodLabel: string;
 };
 
 function buildClientReport(
@@ -73,6 +75,7 @@ function buildClientReport(
   expenses: Expense[],
   contributions: Contribution[],
 ): GenerateReportOutput {
+  const generatedAt = new Date().toLocaleString("en-IN");
   const totalContributions = contributions.reduce(
     (acc, c) => acc + c.amount,
     0,
@@ -83,14 +86,15 @@ function buildClientReport(
 
   const breakdownMap = new Map<string, number>();
   expenses.forEach((expense) => {
-    expense.tags.forEach((tag) => {
+    const tags = expense.tags?.length ? expense.tags : ["Uncategorized"];
+    tags.forEach((tag) => {
       breakdownMap.set(tag, (breakdownMap.get(tag) || 0) + expense.amount);
     });
   });
   const expenseBreakdown = Array.from(breakdownMap, ([category, total]) => ({
     category,
     total,
-  }));
+  })).sort((a, b) => b.total - a.total);
 
   const memberBalances = new Map<
     string,
@@ -122,42 +126,47 @@ function buildClientReport(
     });
   });
 
-  const memberContributions = users
+  const memberRows = users
     .map((user) => {
       const balance = memberBalances.get(user.id) || {
         paid: 0,
         share: 0,
         contributed: 0,
       };
+      const netBalance = balance.paid + balance.contributed - balance.share;
       return {
+        id: user.id,
         name: user.name,
-        total: balance.paid + balance.contributed,
+        paid: balance.paid,
+        contributed: balance.contributed,
+        share: balance.share,
+        netBalance,
       };
     })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const memberContributions = memberRows
+    .map((row) => ({ name: row.name, total: row.paid + row.contributed }))
     .filter((entry) => entry.total > 0);
 
   const netBalances = new Map<string, number>();
-  let report = `
-## Member Summary
-| Member | Expenses Paid | Wallet Contributions | Share of Expenses | Net Balance |
-| :--- | :---: | :---: | :---: | :---: |
-`;
-
-  users.forEach((user) => {
-    const balance = memberBalances.get(user.id) || {
-      paid: 0,
-      share: 0,
-      contributed: 0,
-    };
-    const netBalance = balance.paid + balance.contributed - balance.share;
-    netBalances.set(user.id, netBalance);
-
-    report += `| ${user.name} | ${formatCurrency(balance.paid)} | ${formatCurrency(
-      balance.contributed,
-    )} | ${formatCurrency(balance.share)} | ${formatCurrency(netBalance)} |\n`;
+  memberRows.forEach((row) => {
+    netBalances.set(row.id, row.netBalance);
   });
 
-  report += "\n## Settlement\n";
+  const allDates = [
+    ...expenses.map((entry) => new Date(entry.date)),
+    ...contributions.map((entry) => new Date(entry.date)),
+  ].filter((date) => !Number.isNaN(date.getTime()));
+
+  const periodStart =
+    allDates.length > 0
+      ? new Date(Math.min(...allDates.map((d) => d.getTime())))
+      : null;
+  const periodEnd =
+    allDates.length > 0
+      ? new Date(Math.max(...allDates.map((d) => d.getTime())))
+      : null;
 
   const payers = Array.from(netBalances.entries())
     .filter(([, balance]) => balance > 0)
@@ -166,7 +175,8 @@ function buildClientReport(
     .filter(([, balance]) => balance < 0)
     .sort((a, b) => a[1] - b[1]);
 
-  let settlementSteps = "";
+  const settlementRows: Array<{ from: string; to: string; amount: number }> =
+    [];
   let i = 0;
   let j = 0;
 
@@ -177,7 +187,11 @@ function buildClientReport(
 
     const payerName = users.find((u) => u.id === payerId)?.name || payerId;
     const owerName = users.find((u) => u.id === owerId)?.name || owerId;
-    settlementSteps += `*   **${owerName}** owes **${payerName}** ${formatCurrency(amountToSettle)}.\n`;
+    settlementRows.push({
+      from: owerName,
+      to: payerName,
+      amount: amountToSettle,
+    });
 
     payers[i][1] -= amountToSettle;
     owers[j][1] += amountToSettle;
@@ -186,16 +200,64 @@ function buildClientReport(
     if (Math.abs(owers[j][1]) < 0.01) j += 1;
   }
 
-  if (settlementSteps) {
-    report += settlementSteps;
+  const periodLabel =
+    periodStart && periodEnd
+      ? `${periodStart.toLocaleDateString("en-IN")} - ${periodEnd.toLocaleDateString("en-IN")}`
+      : "No financial activity recorded";
+
+  let report = `# Group Financial Report\n\n`;
+  report += `**Generated on:** ${generatedAt}  \n`;
+  report += `**Reporting period:** ${periodLabel}\n\n`;
+
+  report += `## Executive Summary\n`;
+  report += `- Members: **${users.length}**\n`;
+  report += `- Total expenses: **${formatCurrency(totalExpenses)}**\n`;
+  report += `- Total wallet contributions: **${formatCurrency(totalContributions)}**\n`;
+  report += `- Net wallet position: **${formatCurrency(walletBalance)}**\n\n`;
+
+  report += `## Key Metrics\n`;
+  report += `| Metric | Value |\n`;
+  report += `| :--- | ---: |\n`;
+  report += `| Total Members | ${users.length} |\n`;
+  report += `| Total Expenses | ${formatCurrency(totalExpenses)} |\n`;
+  report += `| Total Contributions | ${formatCurrency(totalContributions)} |\n`;
+  report += `| Average Expense per Member | ${formatCurrency(expensePerMember)} |\n`;
+  report += `| Wallet Balance | ${formatCurrency(walletBalance)} |\n\n`;
+
+  report += `## Expense Category Breakdown\n`;
+  if (expenseBreakdown.length > 0 && totalExpenses > 0) {
+    report += `| Category | Amount | Share |\n`;
+    report += `| :--- | ---: | ---: |\n`;
+    expenseBreakdown.forEach((item) => {
+      const share = (item.total / totalExpenses) * 100;
+      report += `| ${item.category} | ${formatCurrency(item.total)} | ${share.toFixed(1)}% |\n`;
+    });
   } else {
-    report += "All accounts are settled. No payments are needed!";
+    report += `No categorized expenses available for this period.\n`;
+  }
+
+  report += `\n## Member Financial Position\n`;
+  report += `| Member | Expenses Paid | Wallet Contributions | Expense Share | Net Position |\n`;
+  report += `| :--- | ---: | ---: | ---: | ---: |\n`;
+  memberRows.forEach((row) => {
+    report += `| ${row.name} | ${formatCurrency(row.paid)} | ${formatCurrency(row.contributed)} | ${formatCurrency(row.share)} | ${formatCurrency(row.netBalance)} |\n`;
+  });
+
+  report += `\n## Settlement Recommendations\n`;
+  if (settlementRows.length > 0) {
+    report += `| # | Debtor | Creditor | Amount |\n`;
+    report += `| ---: | :--- | :--- | ---: |\n`;
+    settlementRows.forEach((row, index) => {
+      report += `| ${index + 1} | ${row.from} | ${row.to} | ${formatCurrency(row.amount)} |\n`;
+    });
+  } else {
+    report += `All accounts are settled. No pending transfers are required.\n`;
   }
 
   const aiSummary =
     walletBalance >= 0
-      ? "Overall, spending is controlled and the wallet remains healthy for the period."
-      : "Overall, group spending exceeded contributions this period, so adding wallet contributions is recommended.";
+      ? "Financial performance is stable. Contributions adequately cover spending in the selected period."
+      : "Spending exceeded available contributions. Additional wallet funding is recommended to restore a positive balance.";
 
   return {
     report,
@@ -206,11 +268,20 @@ function buildClientReport(
     totalExpenses,
     walletBalance,
     expensePerMember,
+    generatedAt,
+    periodLabel,
   };
 }
 
 export default function ReportsPage() {
-  const { currentUser, isAdmin, isAuthLoading, isAppConfigured } = useAuth();
+  const {
+    currentUser,
+    isAdmin,
+    isAuthLoading,
+    isAppConfigured,
+    appConfig,
+    activeGroupId,
+  } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [reportData, setReportData] = useState<GenerateReportOutput | null>(
@@ -286,8 +357,11 @@ export default function ReportsPage() {
     return acc;
   }, {} as ChartConfig);
 
+  const displayGroupName = appConfig?.groupName || "Shared Expense Tracker";
+  const displayGroupId = appConfig?.groupId || activeGroupId || "N/A";
+
   return (
-    <div className="p-4 md:p-6 lg:p-8 @container animate-fade-up">
+    <div className="p-3 md:p-6 lg:p-8 @container animate-fade-up">
       <div className="mx-auto w-full">
         <div className="flex flex-col @lg:flex-row @lg:items-center @lg:justify-between gap-4 mb-6 print:hidden">
           <div>
@@ -298,8 +372,12 @@ export default function ReportsPage() {
               Generate and view a detailed financial summary.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2 @lg:mt-0">
-            <Button onClick={handleGenerateReport} disabled={isLoading}>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mt-2 @lg:mt-0 w-full @lg:w-auto">
+            <Button
+              onClick={handleGenerateReport}
+              disabled={isLoading}
+              className="w-full sm:w-auto"
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -310,7 +388,11 @@ export default function ReportsPage() {
               )}
             </Button>
             {reportData && (
-              <Button variant="outline" onClick={handlePrint}>
+              <Button
+                variant="outline"
+                onClick={handlePrint}
+                className="w-full sm:w-auto"
+              >
                 <FileDown className="mr-2 h-4 w-4" />
                 Save as PDF
               </Button>
@@ -331,18 +413,41 @@ export default function ReportsPage() {
 
           {reportData && (
             <>
-              <div className="hidden print:block mb-8">
-                <div className="flex items-center gap-4">
-                  <Logo className="h-16 w-16" />
+              <div className="hidden print:block mb-6 print-report-header">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Logo className="h-14 w-14" />
+                    <div>
+                      <h1 className="text-2xl font-bold m-0 leading-tight">
+                        Shared Expense Tracker
+                      </h1>
+                      <p className="text-muted-foreground m-0 text-sm">
+                        Financial Statement
+                      </p>
+                    </div>
+                  </div>
                   <div>
-                    <h1 className="text-3xl font-bold m-0">
-                      Shared Expense Tracker
-                    </h1>
-                    <p className="text-muted-foreground m-0">
-                      Financial Report
+                    <p className="m-0 text-right text-sm font-medium">
+                      {displayGroupName}
+                    </p>
+                    <p className="m-0 text-right text-xs text-muted-foreground">
+                      Group ID: {displayGroupId}
                     </p>
                   </div>
                 </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <p className="m-0">
+                    <span className="font-medium text-foreground">Period:</span>{" "}
+                    {reportData.periodLabel}
+                  </p>
+                  <p className="m-0 sm:text-right">
+                    <span className="font-medium text-foreground">
+                      Generated:
+                    </span>{" "}
+                    {reportData.generatedAt}
+                  </p>
+                </div>
+                <div className="mt-3 border-t border-border" />
               </div>
 
               <div className="print:hidden">
@@ -429,7 +534,7 @@ export default function ReportsPage() {
                   <CardContent className="pl-0 pr-0 md:pr-6">
                     <ChartContainer
                       config={chartConfig}
-                      className="w-full h-[250px] lg:h-[300px]"
+                      className="w-full h-[220px] sm:h-[250px] lg:h-[300px]"
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -445,10 +550,10 @@ export default function ReportsPage() {
                             axisLine={false}
                             tick={{
                               fill: "hsl(var(--foreground))",
-                              fontSize: 12,
+                              fontSize: 11,
                             }}
                             tickMargin={10}
-                            width={80}
+                            width={72}
                           />
                           <XAxis dataKey="total" type="number" hide />
                           <ChartTooltip
@@ -484,12 +589,20 @@ export default function ReportsPage() {
               )}
 
               <Card className="modern-surface border-0 print:shadow-none print:border-none">
-                <CardContent className="pt-6">
-                  <article className="prose prose-sm md:prose-base dark:prose-invert max-w-none prose-headings:tracking-tight prose-p:leading-relaxed">
+                <CardContent className="pt-5 md:pt-6">
+                  <article className="prose prose-sm md:prose-base dark:prose-invert max-w-none prose-headings:tracking-tight prose-p:leading-relaxed prose-th:text-xs prose-td:text-xs md:prose-th:text-sm md:prose-td:text-sm">
                     <ReactMarkdown>{reportData.report}</ReactMarkdown>
                   </article>
                 </CardContent>
               </Card>
+
+              <div className="hidden print:flex print-report-footer items-center justify-between text-[10px] text-muted-foreground">
+                <p className="m-0">
+                  Confidential internal report • {displayGroupName}
+                </p>
+                <p className="m-0">Generated: {reportData.generatedAt}</p>
+                <p className="m-0 print-page-number" />
+              </div>
             </>
           )}
 
@@ -512,6 +625,10 @@ export default function ReportsPage() {
 
         <style jsx global>{`
           @media print {
+            @page {
+              size: A4;
+              margin: 16mm;
+            }
             body * {
               visibility: hidden;
             }
@@ -524,7 +641,8 @@ export default function ReportsPage() {
               left: 0;
               top: 0;
               width: 100%;
-              padding: 1rem;
+              padding: 0;
+              padding-bottom: 1.6rem;
             }
             .prose {
               font-size: 12px;
@@ -535,9 +653,27 @@ export default function ReportsPage() {
               margin-top: 1.2em;
               margin-bottom: 0.5em;
             }
+            .print-report-header {
+              break-after: avoid;
+            }
+            .print-report-footer {
+              position: fixed;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              border-top: 1px solid hsl(var(--border));
+              background: hsl(var(--background));
+              padding-top: 0.25rem;
+            }
+            .print-page-number::before {
+              content: "Page " counter(page);
+            }
           }
           .prose table {
             width: 100%;
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
             border-collapse: collapse;
             margin-top: 1em;
             margin-bottom: 1em;
@@ -545,13 +681,30 @@ export default function ReportsPage() {
           .prose th,
           .prose td {
             border: 1px solid hsl(var(--border));
-            padding: 0.5em 1em;
+            padding: 0.45em 0.75em;
           }
           .prose thead {
             background-color: hsl(var(--muted));
           }
           .prose thead th {
             font-weight: 600;
+          }
+          @media (min-width: 768px) {
+            .prose table {
+              display: table;
+              white-space: normal;
+            }
+            .prose th,
+            .prose td {
+              padding: 0.5em 1em;
+            }
+          }
+          @media print {
+            .prose table {
+              display: table;
+              overflow: visible;
+              white-space: normal;
+            }
           }
           .prose a {
             color: inherit;

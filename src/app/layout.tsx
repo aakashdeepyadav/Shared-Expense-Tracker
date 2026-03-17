@@ -114,7 +114,7 @@ function AppLayout({
     return (
       <>
         <OfflineBanner />
-        <main className="relative min-h-screen">{children}</main>
+        <main className="relative app-main min-h-screen">{children}</main>
         <AppSignature />
         <Toaster />
         <FirebaseErrorListener />
@@ -126,9 +126,9 @@ function AppLayout({
     <>
       <OfflineBanner />
       <SidebarProvider className="flex-col">
-        <div className="page-shell flex min-h-screen w-full">
+        <div className="page-shell app-shell flex min-h-screen w-full">
           <AppSidebar />
-          <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
+          <main className="relative app-main flex-1 min-w-0">
             <div className="w-full">{children}</div>
           </main>
         </div>
@@ -148,9 +148,29 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+        />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta
+          name="theme-color"
+          content="#0f172a"
+          media="(prefers-color-scheme: dark)"
+        />
+        <meta
+          name="theme-color"
+          content="#f5fbfd"
+          media="(prefers-color-scheme: light)"
+        />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
-      <body className={cn("min-h-screen bg-background font-body antialiased")}>
+      <body
+        className={cn(
+          "min-h-screen bg-background font-body antialiased overflow-x-hidden",
+        )}
+      >
         <AuthProvider>
           <ThemeProvider
             attribute="class"

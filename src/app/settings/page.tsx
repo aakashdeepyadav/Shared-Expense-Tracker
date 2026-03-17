@@ -337,7 +337,7 @@ export default function SettingsPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader />
-      <main className="relative flex-1 overflow-y-auto bg-slate-50 p-4 pb-20 dark:bg-slate-950 md:p-6 md:pb-6 lg:p-8">
+      <main className="relative flex-1 overflow-y-auto bg-slate-50 p-3 pb-4 dark:bg-slate-950 md:p-6 md:pb-6 lg:p-8">
         <div
           className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
           style={dotPatternLight}
@@ -347,8 +347,8 @@ export default function SettingsPage() {
           style={dotPatternDark}
         />
         <div className="mx-auto w-full space-y-6 md:space-y-8">
-          <div className="pointer-events-none absolute left-10 top-8 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
-          <div className="pointer-events-none absolute right-8 top-24 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
+          <div className="pointer-events-none absolute left-10 top-8 hidden md:block h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+          <div className="pointer-events-none absolute right-8 top-24 hidden md:block h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
 
           <header className="mb-4 animate-fade-up">
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">

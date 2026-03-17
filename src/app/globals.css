@@ -4,6 +4,7 @@
 
 body {
   font-family: var(--font-inter), "Segoe UI", system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @layer base {
@@ -85,6 +86,14 @@ body {
     @apply bg-background text-foreground;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E");
     background-attachment: fixed;
+    overscroll-behavior-y: none;
+  }
+
+  html,
+  body {
+    min-height: 100dvh;
+    width: 100%;
+    overflow-x: hidden;
   }
 
   .dark body {
@@ -113,6 +122,23 @@ body {
 
   .page-shell {
     @apply relative;
+  }
+
+  .app-shell {
+    min-height: 100dvh;
+  }
+
+  .app-main {
+    min-height: 100dvh;
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  @media (min-width: 768px) {
+    .app-main {
+      padding-bottom: 0;
+    }
   }
 
   .page-shell::before {

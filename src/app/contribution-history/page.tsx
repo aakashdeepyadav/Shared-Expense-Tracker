@@ -141,7 +141,7 @@ export default function ContributionHistoryPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader />
-      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+      <main className="flex-1 overflow-y-auto p-3 pb-4 md:p-6 md:pb-6 lg:p-8">
         <div className="mx-auto w-full animate-fade-up">
           <header className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
@@ -153,83 +153,142 @@ export default function ContributionHistoryPage() {
                 : "Showing archived month contributions."}
             </p>
           </header>
-          <div className="mb-4 max-w-sm">
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select timeframe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current">Current Month</SelectItem>
-                {archiveSummaries.map((archive) => (
-                  <SelectItem key={archive.id} value={archive.id}>
-                    {archive.periodLabel}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="sticky top-2 z-20 mb-4">
+            <div className="w-full md:max-w-sm rounded-xl border border-border/60 bg-background/90 p-2 shadow-sm backdrop-blur">
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger className="h-11 w-full bg-background">
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current Month</SelectItem>
+                  {archiveSummaries.map((archive) => (
+                    <SelectItem key={archive.id} value={archive.id}>
+                      {archive.periodLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <Card className="modern-surface border-0 animate-soft-pop overflow-hidden">
-            <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[560px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Contributor</TableHead>
-                    <TableHead className="hidden sm:table-cell">Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleContributions.length > 0 ? (
-                    visibleContributions.map((contribution) => {
-                      const contributor = userMap.get(
-                        contribution.contributorId,
-                      );
-                      return (
-                        <TableRow key={contribution.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-8 w-8">
-                                <AvatarImage
-                                  src={contributor?.avatarUrl}
-                                  alt={contributor?.name}
-                                  data-ai-hint="person portrait"
-                                />
-                                <AvatarFallback>
-                                  {contributor?.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="font-medium">
+            <CardContent className="p-0">
+              <div className="md:hidden divide-y divide-border/60">
+                {visibleContributions.length > 0 ? (
+                  visibleContributions.map((contribution) => {
+                    const contributor = userMap.get(contribution.contributorId);
+                    return (
+                      <div key={contribution.id} className="p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7">
+                              <AvatarImage
+                                src={contributor?.avatarUrl}
+                                alt={contributor?.name}
+                                data-ai-hint="person portrait"
+                              />
+                              <AvatarFallback>
+                                {contributor?.name.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">
                                 {contributor?.name}
-                              </span>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(
+                                  new Date(contribution.date),
+                                  "dd/MM/yyyy",
+                                )}
+                              </p>
                             </div>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell">
-                            {format(new Date(contribution.date), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell className="text-right">
+                          </div>
+                          <p className="text-sm font-semibold whitespace-nowrap">
                             {formatCurrency(contribution.amount)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  ) : (
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-muted-foreground">
+                    {isAdmin
+                      ? "No contributions found."
+                      : "No personal contributions found."}
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <Table className="min-w-[480px]">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={3}
-                        className="text-center text-muted-foreground py-8"
-                      >
-                        {isAdmin
-                          ? "No contributions found."
-                          : "No personal contributions found."}
-                      </TableCell>
+                      <TableHead>Contributor</TableHead>
+                      <TableHead className="hidden sm:table-cell">
+                        Date
+                      </TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleContributions.length > 0 ? (
+                      visibleContributions.map((contribution) => {
+                        const contributor = userMap.get(
+                          contribution.contributorId,
+                        );
+                        return (
+                          <TableRow key={contribution.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage
+                                    src={contributor?.avatarUrl}
+                                    alt={contributor?.name}
+                                    data-ai-hint="person portrait"
+                                  />
+                                  <AvatarFallback>
+                                    {contributor?.name.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">
+                                  {contributor?.name}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              {format(
+                                new Date(contribution.date),
+                                "dd/MM/yyyy",
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(contribution.amount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={3}
+                          className="text-center text-muted-foreground py-8"
+                        >
+                          {isAdmin
+                            ? "No contributions found."
+                            : "No personal contributions found."}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
             {isAdmin && selectedPeriod === "current" && hasMore && (
               <CardFooter className="pt-6 justify-center">
-                <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                <Button
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="w-full sm:w-auto"
+                >
                   {isLoadingMore ? "Loading..." : "Load More"}
                 </Button>
               </CardFooter>

@@ -36,6 +36,7 @@ export default function LoginPage() {
     activeGroupId,
     selectGroup,
     refreshGroupDirectory,
+    clearSelectedGroup,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
@@ -111,6 +112,16 @@ export default function LoginPage() {
     setLoginName("");
     setLockoutTime(0);
     setTimeRemaining(0);
+  };
+
+  const handleSwitchGroup = async () => {
+    await clearSelectedGroup();
+    setGroupIdInput("");
+    resetLoginFlow();
+    toast({
+      title: "Group cleared",
+      description: "Enter another group ID to continue.",
+    });
   };
 
   const getButtonText = () => {
@@ -276,7 +287,20 @@ export default function LoginPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter className="justify-center pt-0">
+        <CardFooter
+          className={`pt-0 ${
+            hasSelectedGroup ? "justify-between" : "justify-center"
+          }`}
+        >
+          {hasSelectedGroup && (
+            <Button
+              variant="link"
+              onClick={handleSwitchGroup}
+              className="h-auto p-0 text-sm"
+            >
+              Switch Group
+            </Button>
+          )}
           <Button variant="link" asChild className="h-auto p-0 text-sm">
             <Link href="/setup">
               New group? Signup

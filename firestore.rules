@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     function canAccessInitializedGroup(groupId) {
-      return isValidGroupId(groupId) && groupAppConfigExists(groupId) && isSignedIn();
+      return isValidGroupId(groupId) && groupAppConfigExists(groupId);
     }
 
     function validPhoneOrNull(phone) {
@@ -61,7 +61,7 @@ service cloud.firestore {
       }
 
       match /expenses/{expenseId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId)
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -70,7 +70,7 @@ service cloud.firestore {
       }
 
       match /contributions/{contributionId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId)
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -79,7 +79,7 @@ service cloud.firestore {
       }
 
       match /messages/{messageId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId)
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
@@ -88,7 +88,7 @@ service cloud.firestore {
       }
 
       match /auditLogs/{entryId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId)
           && request.resource.data.action is string
           && request.resource.data.action.size() > 0
@@ -97,7 +97,7 @@ service cloud.firestore {
       }
 
       match /monthArchives/{archiveId} {
-        allow read: if isSignedIn();
+        allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId);
         allow delete: if false;
       }

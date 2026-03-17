@@ -92,7 +92,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader />
-      <main className="flex-1 flex flex-col p-3 md:p-6 pb-20 md:pb-6">
+      <main className="flex-1 flex flex-col p-2 md:p-6 pb-2 md:pb-6">
         <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full mx-auto border-0 p-3 md:p-5">
           <div className="flex-1 overflow-y-auto space-y-4 md:space-y-6 pr-1 md:pr-2">
             {messages.map((msg) => {
@@ -113,7 +113,7 @@ export default function ChatPage() {
                   )}
                   <div
                     className={cn(
-                      "max-w-[82%] md:max-w-[70%] px-3 py-2.5 md:p-3 rounded-2xl flex flex-col shadow-sm",
+                      "max-w-[86%] md:max-w-[70%] px-3 py-2.5 md:p-3 rounded-2xl flex flex-col shadow-sm",
                       isOwnMessage
                         ? "bg-primary text-primary-foreground rounded-br-none"
                         : "bg-muted/80 rounded-bl-none",
@@ -151,10 +151,15 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          <div className="pt-3 md:pt-4 bg-transparent">
+          <div
+            className="sticky bottom-0 pt-2 md:pt-4 bg-transparent"
+            style={{
+              paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))",
+            }}
+          >
             <form
               onSubmit={handleSendMessage}
-              className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/80 p-2 backdrop-blur"
+              className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/90 p-2 backdrop-blur"
             >
               <Input
                 value={newMessage}
@@ -162,7 +167,7 @@ export default function ChatPage() {
                 placeholder="Type a message..."
                 autoComplete="off"
                 disabled={isSending}
-                className="border-0 bg-transparent focus-visible:ring-0"
+                className="h-10 border-0 bg-transparent focus-visible:ring-0"
               />
               <Button
                 type="submit"
