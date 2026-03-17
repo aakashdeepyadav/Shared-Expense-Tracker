@@ -327,7 +327,16 @@ export default function SetupPage() {
     setIsSubmitting(true);
     try {
       await initializeTrackerInstance(payload);
-      await refreshAppSetup();
+
+      // Setup creation already succeeded at this point. Refresh can fail under
+      // strict Firestore/App Check conditions on first run, so do not block
+      // onboarding on this non-critical step.
+      try {
+        await refreshAppSetup();
+      } catch {
+        // noop
+      }
+
       toast({
         title: "Group created",
         description: "Setup complete. Continue to login.",
