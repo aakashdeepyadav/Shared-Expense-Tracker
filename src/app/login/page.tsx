@@ -34,7 +34,6 @@ export default function LoginPage() {
     users,
     activeGroupId,
     selectGroup,
-    clearSelectedGroup,
     refreshGroupDirectory,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -157,15 +156,17 @@ export default function LoginPage() {
         />
         <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
         <div className="pointer-events-none absolute right-12 bottom-12 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-        <Card className="modern-surface w-full max-w-md border-0">
-          <CardHeader className="items-center text-center">
-            <Logo className="mb-4 h-16 w-16" />
-            <CardTitle>Welcome to Shared Expense Tracker</CardTitle>
+        <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
+          <CardHeader className="items-center pb-2 text-center">
+            <Logo className="mb-3 h-14 w-14" />
+            <CardTitle className="text-2xl tracking-tight">
+              Welcome to Shared Expense Tracker
+            </CardTitle>
             <CardDescription>
               Join an existing group or create a new one.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="group-id-input">Join by group ID</Label>
               <div className="flex gap-2">
@@ -174,17 +175,19 @@ export default function LoginPage() {
                   value={groupIdInput}
                   onChange={(e) => setGroupIdInput(e.target.value)}
                   placeholder="e.g. flat-2-ab12cd"
+                  className="h-11"
                 />
                 <Button
                   variant="secondary"
                   onClick={() => handleSelectGroup(groupIdInput.trim())}
                   disabled={!groupIdInput.trim()}
+                  className="h-11"
                 >
                   Join
                 </Button>
               </div>
             </div>
-            <Button className="w-full" asChild>
+            <Button className="h-11 w-full" asChild>
               <Link href="/setup">
                 Signup
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -192,7 +195,7 @@ export default function LoginPage() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-11 w-full"
               onClick={() => refreshGroupDirectory()}
             >
               Refresh
@@ -216,37 +219,24 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
       <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
       <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-      <Card className="modern-surface w-full max-w-md border-0">
-        <CardHeader className="items-center text-center">
-          <Logo className="mb-4 h-16 w-16" />
-          <CardTitle className="text-2xl tracking-tight">
-            Welcome to {appConfig?.groupName || "Shared Expense Tracker"}
+      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
+        <CardHeader className="items-center pb-2 text-center">
+          <Logo className="mb-3 h-14 w-14" />
+          <CardTitle className="text-3xl tracking-tight">
+            Sign in to {appConfig?.groupName || "your group"}
           </CardTitle>
-          <CardDescription>Sign in or signup for a new group</CardDescription>
+          <CardDescription>Secure access to your shared wallet</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
-            <div className="font-medium">
-              Active group: {appConfig?.groupName || activeGroupId}
+          <div className="mb-5 rounded-2xl border border-border/70 bg-muted/35 p-4 text-sm">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Active group
+            </div>
+            <div className="mt-1 text-base font-semibold">
+              {appConfig?.groupName || activeGroupId}
             </div>
             <div className="mt-1 text-muted-foreground">
               ID: {activeGroupId}
-            </div>
-            <div className="mt-2 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  await clearSelectedGroup();
-                  setLoginName("");
-                  resetLoginFlow();
-                }}
-              >
-                Switch Group
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/setup">Create New Group</Link>
-              </Button>
             </div>
           </div>
           {isLocked && (
@@ -259,7 +249,7 @@ export default function LoginPage() {
               </AlertDescription>
             </Alert>
           )}
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-name-input">Name</Label>
@@ -268,6 +258,7 @@ export default function LoginPage() {
                   value={loginName}
                   onChange={(e) => setLoginName(e.target.value)}
                   placeholder="Type your name"
+                  className="h-12 rounded-xl"
                   disabled={isLoggingIn || isLocked}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 />
@@ -280,6 +271,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={credentialPlaceholder}
+                  className="h-12 rounded-xl"
                   disabled={isLoggingIn || isLocked}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 />
@@ -288,24 +280,13 @@ export default function LoginPage() {
 
             <Button
               onClick={handleLogin}
-              className="w-full"
+              className="h-12 w-full rounded-xl text-base"
               disabled={
                 isLoggingIn || isLocked || !loginName.trim() || !password.trim()
               }
             >
               {getButtonText()}
             </Button>
-          </div>
-
-          <div className="mt-6 border-t pt-4 text-center text-sm text-muted-foreground">
-            Need a new group?{" "}
-            <Link
-              href="/setup"
-              className="text-primary underline underline-offset-4"
-            >
-              Create Group
-            </Link>
-            .
           </div>
         </CardContent>
       </Card>
