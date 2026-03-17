@@ -296,11 +296,25 @@ export default function SetupPage() {
       });
       router.push("/login");
     } catch (error: unknown) {
+      const errorCode =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof (error as { code?: unknown }).code === "string"
+          ? (error as { code: string }).code
+          : undefined;
+
+      const rawMessage = error instanceof Error ? error.message : "";
+      const isPermissionError =
+        errorCode === "permission-denied" ||
+        /missing or insufficient permissions/i.test(rawMessage);
+
       toast({
         variant: "destructive",
         title: "Setup failed",
-        description:
-          error instanceof Error
+        description: isPermissionError
+          ? "Firestore rules blocked setup. Deploy firestore.rules to this Firebase project and try again."
+          : error instanceof Error
             ? error.message
             : "Could not create tracker instance.",
       });
