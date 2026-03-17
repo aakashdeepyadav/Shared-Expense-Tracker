@@ -21,6 +21,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Logo } from "@/components/icons/logo";
@@ -33,7 +34,14 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { currentUser, logout, isAdmin, appConfig, refreshGroupDirectory } =
     useAuth();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -80,7 +88,7 @@ export function AppSidebar() {
               tooltip="Dashboard"
               className="rounded-xl h-10"
             >
-              <Link href="/">
+              <Link href="/" onClick={handleNavClick}>
                 <LayoutDashboard />
                 Dashboard
               </Link>
@@ -93,7 +101,7 @@ export function AppSidebar() {
               tooltip="Expense History"
               className="rounded-xl h-10"
             >
-              <Link href="/expense-history">
+              <Link href="/expense-history" onClick={handleNavClick}>
                 <ReceiptText />
                 Expense History
               </Link>
@@ -106,7 +114,7 @@ export function AppSidebar() {
               tooltip="Contribution History"
               className="rounded-xl h-10"
             >
-              <Link href="/contribution-history">
+              <Link href="/contribution-history" onClick={handleNavClick}>
                 <PiggyBank />
                 Contribution History
               </Link>
@@ -119,7 +127,7 @@ export function AppSidebar() {
               tooltip="Chat"
               className="rounded-xl h-10"
             >
-              <Link href="/chat" className="relative">
+              <Link href="/chat" className="relative" onClick={handleNavClick}>
                 <MessageSquare />
                 Chat
                 {hasUnreadMessages && pathname !== "/chat" && (
@@ -136,7 +144,7 @@ export function AppSidebar() {
                 tooltip="Reports"
                 className="rounded-xl h-10"
               >
-                <Link href="/reports">
+                <Link href="/reports" onClick={handleNavClick}>
                   <FileText />
                   Reports
                 </Link>
@@ -151,7 +159,7 @@ export function AppSidebar() {
                 tooltip="Audit Logs"
                 className="rounded-xl h-10"
               >
-                <Link href="/audit-logs">
+                <Link href="/audit-logs" onClick={handleNavClick}>
                   <ClipboardList />
                   Audit Logs
                 </Link>
@@ -165,7 +173,7 @@ export function AppSidebar() {
               tooltip="Settings"
               className="rounded-xl h-10"
             >
-              <Link href="/settings">
+              <Link href="/settings" onClick={handleNavClick}>
                 <Settings />
                 Settings
               </Link>

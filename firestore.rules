@@ -66,7 +66,7 @@ service cloud.firestore {
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.amount <= 10000000;
-        allow delete: if false;
+        allow delete: if canAccessInitializedGroup(groupId);
       }
 
       match /contributions/{contributionId} {
@@ -75,7 +75,7 @@ service cloud.firestore {
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
           && request.resource.data.amount <= 10000000;
-        allow delete: if false;
+        allow delete: if canAccessInitializedGroup(groupId);
       }
 
       match /messages/{messageId} {
@@ -84,7 +84,7 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000;
-        allow delete: if false;
+        allow delete: if canAccessInitializedGroup(groupId);
       }
 
       match /auditLogs/{entryId} {
@@ -99,7 +99,7 @@ service cloud.firestore {
       match /monthArchives/{archiveId} {
         allow read: if canAccessInitializedGroup(groupId);
         allow create, update: if canAccessInitializedGroup(groupId);
-        allow delete: if false;
+        allow delete: if canAccessInitializedGroup(groupId);
       }
     }
 
