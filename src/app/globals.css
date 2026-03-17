@@ -159,6 +159,11 @@ body {
 }
 
 @layer utilities {
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
   .animate-fade-up {
     animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   }

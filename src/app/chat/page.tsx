@@ -93,8 +93,8 @@ export default function ChatPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader />
       <main className="flex-1 min-h-0 flex flex-col p-2 md:p-6 pb-2 md:pb-6">
-        <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full mx-auto border-0 p-3 md:p-5">
-          <div className="flex-1 overflow-y-auto space-y-4 md:space-y-6 pr-1 md:pr-2">
+        <div className="modern-surface animate-fade-up flex-1 min-h-0 flex flex-col w-full mx-auto border-0 p-3 md:p-5">
+          <div className="touch-scroll flex-1 min-h-0 overflow-y-auto space-y-4 md:space-y-6 pr-1 md:pr-2">
             {messages.map((msg) => {
               const isOwnMessage = msg.userId === currentUser.id;
               return (
@@ -152,7 +152,7 @@ export default function ChatPage() {
             )}
           </div>
           <div
-            className="sticky bottom-0 pt-2 md:pt-4 bg-transparent"
+            className="pt-2 md:pt-4 bg-transparent"
             style={{
               paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))",
             }}
