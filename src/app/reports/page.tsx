@@ -61,6 +61,9 @@ type GenerateReportOutput = {
   report: string;
   expenseBreakdown: { category: string; total: number }[];
   memberContributions: { name: string; total: number }[];
+  creditors: { name: string; amount: number }[];
+  debtors: { name: string; amount: number }[];
+  settlementRows: { from: string; to: string; amount: number }[];
   aiSummary: string;
   totalContributions: number;
   totalExpenses: number;
@@ -168,11 +171,29 @@ function buildClientReport(
       ? new Date(Math.max(...allDates.map((d) => d.getTime())))
       : null;
 
+  const creditors = Array.from(netBalances.entries())
+    .filter(([, balance]) => balance > 0)
+    .map(([userId, amount]) => ({
+      name: users.find((u) => u.id === userId)?.name || userId,
+      amount,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const debtors = Array.from(netBalances.entries())
+    .filter(([, balance]) => balance < 0)
+    .map(([userId, amount]) => ({
+      name: users.find((u) => u.id === userId)?.name || userId,
+      amount: Math.abs(amount),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
   const payers = Array.from(netBalances.entries())
     .filter(([, balance]) => balance > 0)
+    .map(([id, balance]) => [id, balance] as [string, number])
     .sort((a, b) => b[1] - a[1]);
   const owers = Array.from(netBalances.entries())
     .filter(([, balance]) => balance < 0)
+    .map(([id, balance]) => [id, balance] as [string, number])
     .sort((a, b) => a[1] - b[1]);
 
   const settlementRows: Array<{ from: string; to: string; amount: number }> =
@@ -243,6 +264,28 @@ function buildClientReport(
     report += `| ${row.name} | ${formatCurrency(row.paid)} | ${formatCurrency(row.contributed)} | ${formatCurrency(row.share)} | ${formatCurrency(row.netBalance)} |\n`;
   });
 
+  report += `\n## Who Is Owed\n`;
+  if (creditors.length > 0) {
+    report += `| Member | Receivable Amount |\n`;
+    report += `| :--- | ---: |\n`;
+    creditors.forEach((row) => {
+      report += `| ${row.name} | ${formatCurrency(row.amount)} |\n`;
+    });
+  } else {
+    report += `No member has pending receivables.\n`;
+  }
+
+  report += `\n## Who Owes\n`;
+  if (debtors.length > 0) {
+    report += `| Member | Payable Amount |\n`;
+    report += `| :--- | ---: |\n`;
+    debtors.forEach((row) => {
+      report += `| ${row.name} | ${formatCurrency(row.amount)} |\n`;
+    });
+  } else {
+    report += `No member has pending payables.\n`;
+  }
+
   report += `\n## Settlement Recommendations\n`;
   if (settlementRows.length > 0) {
     report += `| # | Debtor | Creditor | Amount |\n`;
@@ -263,6 +306,9 @@ function buildClientReport(
     report,
     expenseBreakdown,
     memberContributions,
+    creditors,
+    debtors,
+    settlementRows,
     aiSummary,
     totalContributions,
     totalExpenses,
@@ -515,6 +561,95 @@ export default function ReportsPage() {
                         {formatCurrency(reportData.walletBalance)}
                       </p>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="modern-surface border-0 print:hidden">
+                <CardHeader>
+                  <CardTitle>Settlement Summary</CardTitle>
+                  <CardDescription>
+                    Clear view of who owes, who is owed, and exact payments to
+                    settle balances.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Who Owes</h3>
+                      {reportData.debtors.length > 0 ? (
+                        <div className="space-y-2">
+                          {reportData.debtors.map((row) => (
+                            <div
+                              key={`debtor-${row.name}`}
+                              className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2"
+                            >
+                              <span className="text-sm">{row.name}</span>
+                              <span className="text-sm font-semibold">
+                                {formatCurrency(row.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No pending payable amounts.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">
+                        Who Is Owed
+                      </h3>
+                      {reportData.creditors.length > 0 ? (
+                        <div className="space-y-2">
+                          {reportData.creditors.map((row) => (
+                            <div
+                              key={`creditor-${row.name}`}
+                              className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2"
+                            >
+                              <span className="text-sm">{row.name}</span>
+                              <span className="text-sm font-semibold">
+                                {formatCurrency(row.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No pending receivable amounts.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">
+                      Who Pays Whom to Settle
+                    </h3>
+                    {reportData.settlementRows.length > 0 ? (
+                      <div className="space-y-2">
+                        {reportData.settlementRows.map((row, index) => (
+                          <div
+                            key={`settlement-${index}-${row.from}-${row.to}`}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                          >
+                            <p className="text-sm">
+                              <span className="font-medium">{row.from}</span>{" "}
+                              pays <span className="font-medium">{row.to}</span>
+                            </p>
+                            <span className="text-sm font-semibold whitespace-nowrap">
+                              {formatCurrency(row.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        All accounts are already settled.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

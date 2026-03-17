@@ -81,7 +81,7 @@ export function ExpenseDialog({
 
   const defaultValues = React.useMemo(
     () => ({
-      amount: 0,
+      amount: undefined as unknown as number,
       payerId: WALLET_PAYER_ID,
       date: new Date(),
       tags: [],
@@ -235,6 +235,12 @@ export function ExpenseDialog({
                           placeholder="0.00"
                           className="pl-8"
                           {...field}
+                          value={
+                            field.value === undefined ||
+                            Number.isNaN(field.value as number)
+                              ? ""
+                              : field.value
+                          }
                         />
                       </div>
                     </FormControl>

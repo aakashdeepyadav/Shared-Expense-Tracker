@@ -43,7 +43,8 @@ function AppLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = React.useState(false);
-  const isAuthPage = pathname === "/login" || pathname === "/setup";
+  const isAuthPage =
+    pathname === "/login" || pathname === "/setup" || pathname === "/guide";
 
   React.useEffect(() => {
     setIsMounted(true);

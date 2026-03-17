@@ -12,7 +12,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -173,7 +172,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
       <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
       <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
+      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card shadow-2xl">
         <CardHeader className="items-center pb-2 text-center">
           <Logo className="mb-3 h-14 w-14" />
           <CardTitle className="text-3xl tracking-tight">Sign In</CardTitle>
@@ -287,27 +286,37 @@ export default function LoginPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter
-          className={`pt-0 ${
-            hasSelectedGroup ? "justify-between" : "justify-center"
-          }`}
-        >
-          {hasSelectedGroup && (
-            <Button
-              variant="link"
-              onClick={handleSwitchGroup}
-              className="h-auto p-0 text-sm"
-            >
-              Switch Group
-            </Button>
-          )}
-          <Button variant="link" asChild className="h-auto p-0 text-sm">
-            <Link href="/setup">
-              New group? Signup
-              <ArrowRight className="ml-1 h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </CardFooter>
+        <div className="border-t border-border/70 px-6 pb-6 pt-4">
+          <div className="rounded-2xl border border-border/70 bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Quick Links
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {hasSelectedGroup ? (
+                <Button
+                  variant="outline"
+                  onClick={handleSwitchGroup}
+                  className="h-10 text-sm"
+                >
+                  Switch Group
+                </Button>
+              ) : (
+                <div className="hidden sm:block" />
+              )}
+
+              <Button variant="outline" asChild className="h-10 text-sm">
+                <Link href="/guide">Guide</Link>
+              </Button>
+
+              <Button variant="outline" asChild className="h-10 text-sm">
+                <Link href="/setup">
+                  New Group
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );
