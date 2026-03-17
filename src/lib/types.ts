@@ -27,8 +27,6 @@ export type FirebaseProjectConfigInput = {
   [key: string]: string | undefined;
 };
 
-export type TrackerTheme = "system" | "light" | "dark";
-
 export type AppConfig = {
   initialized: boolean;
   groupId?: string;
@@ -37,7 +35,6 @@ export type AppConfig = {
   memberTypeLabel?: string;
   adminName?: string;
   adminAvatarUrl?: string;
-  themePreference: TrackerTheme;
   modelApiKey?: string;
   firebaseProjectConfig?: FirebaseProjectConfigInput;
   currentPeriodStart?: string;
@@ -53,7 +50,6 @@ export type TrackerSetupPayload = {
   members: SetupMemberInput[];
   adminIndex: number;
   adminPassword: string;
-  themePreference: TrackerTheme;
   modelApiKey?: string;
   firebaseProjectConfig?: FirebaseProjectConfigInput;
 };

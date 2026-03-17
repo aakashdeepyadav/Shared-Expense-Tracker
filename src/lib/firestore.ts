@@ -356,7 +356,6 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     memberTypeLabel: payload.memberTypeLabel || 'member',
     adminName: adminMember.name,
     adminAvatarUrl: adminMember.avatarUrl,
-    themePreference: payload.themePreference,
     modelApiKey: payload.modelApiKey || null,
     firebaseProjectConfig: payload.firebaseProjectConfig || null,
     currentPeriodStart: nowIso,
@@ -612,6 +611,85 @@ export async function updateUserPhoneNumber(userId: string, phoneNumber: string)
       path: userDocRef.path,
       operation: 'update',
       requestResourceData: { phoneNumber },
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function updateUserProfile(
+  userId: string,
+  payload: { name: string; phoneNumber?: string },
+): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  const trimmedName = payload.name.trim();
+  if (!userId) throw new Error('User ID is required.');
+  if (!trimmedName) throw new Error('Name is required.');
+
+  const normalizedPhone = payload.phoneNumber
+    ? normalizeIndianPhoneNumber(payload.phoneNumber)
+    : undefined;
+
+  const updatePayload = {
+    name: trimmedName,
+    phoneNumber: normalizedPhone || null,
+  };
+
+  if (userId === 'admin') {
+    const adminConfigRef = groupConfigDoc(resolvedGroupId, 'admin');
+    try {
+      await updateDoc(adminConfigRef, updatePayload);
+      return;
+    } catch (error) {
+      const permissionError = new FirestorePermissionError({
+        path: adminConfigRef.path,
+        operation: 'update',
+        requestResourceData: updatePayload,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      throw error;
+    }
+  }
+
+  const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', userId);
+  try {
+    await updateDoc(userDocRef, updatePayload);
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: userDocRef.path,
+      operation: 'update',
+      requestResourceData: updatePayload,
+    });
+    errorEmitter.emit('permission-error', permissionError);
+    throw error;
+  }
+}
+
+export async function updateSharedMemberPin(newPin: string): Promise<void> {
+  const resolvedGroupId = resolveGroupId();
+  const sanitizedPin = newPin.trim();
+  if (!/^\d{6}$/.test(sanitizedPin)) {
+    throw new Error('Shared member PIN must be exactly 6 digits.');
+  }
+
+  const usersCol = groupCollection(resolvedGroupId, 'users');
+  const usersSnapshot = await getDocs(usersCol);
+  const batch = writeBatch(db);
+
+  usersSnapshot.docs.forEach((userDoc) => {
+    batch.update(userDoc.ref, { pin: sanitizedPin });
+  });
+
+  const adminConfigRef = groupConfigDoc(resolvedGroupId, 'admin');
+  batch.update(adminConfigRef, { pin: sanitizedPin });
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    const permissionError = new FirestorePermissionError({
+      path: `groups/${resolvedGroupId}/users + config/admin`,
+      operation: 'update',
+      requestResourceData: { pin: 'REDACTED' },
     });
     errorEmitter.emit('permission-error', permissionError);
     throw error;

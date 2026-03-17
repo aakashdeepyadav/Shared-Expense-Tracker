@@ -148,7 +148,7 @@ export default function ExpenseHistoryPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <PageHeader />
       <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
         <div className="mx-auto w-full max-w-6xl animate-fade-up">

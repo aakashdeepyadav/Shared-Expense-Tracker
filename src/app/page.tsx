@@ -201,7 +201,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <PageHeader
         onAddExpense={handleAddExpense}
         onAddContribution={handleAddContribution}

@@ -90,7 +90,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex h-full flex-col">
       <PageHeader />
       <main className="flex-1 flex flex-col p-3 md:p-6 pb-20 md:pb-6">
         <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full mx-auto border-0 p-3 md:p-5">

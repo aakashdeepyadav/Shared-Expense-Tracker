@@ -12,7 +12,6 @@ import { Inter } from "next/font/google";
 import { AppBottomNav } from "@/components/app-bottom-nav";
 import React from "react";
 import FirebaseErrorListener from "@/components/FirebaseErrorListener";
-import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 
 // This is outside because metadata can't be in a client component
@@ -41,7 +40,6 @@ function AppLayout({
   children: React.ReactNode;
 }>) {
   const { isAuthLoading, appConfig, isAppConfigured, currentUser } = useAuth();
-  const { setTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = React.useState(false);
@@ -50,12 +48,6 @@ function AppLayout({
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  React.useEffect(() => {
-    if (appConfig?.themePreference) {
-      setTheme(appConfig.themePreference);
-    }
-  }, [appConfig?.themePreference, setTheme]);
 
   React.useEffect(() => {
     if (!isMounted || isAuthLoading) {
@@ -138,7 +130,6 @@ function AppLayout({
           <AppSidebar />
           <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
             <div className="w-full">{children}</div>
-            <AppSignature />
           </main>
         </div>
         <AppBottomNav />

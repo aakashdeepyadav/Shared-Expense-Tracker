@@ -20,6 +20,8 @@ import {
   addAdminAuditLog,
   getAdminPassword,
   rolloverMonthWithArchive,
+  updateSharedMemberPin,
+  updateUserProfile,
   updateUserPhoneNumber,
 } from "@/lib/firestore";
 import {
@@ -49,7 +51,6 @@ export default function SettingsPage() {
     currentUser,
     isAdmin,
     updateUserCredential,
-    logout,
     isAuthLoading,
     isAppConfigured,
     users,
@@ -61,8 +62,16 @@ export default function SettingsPage() {
   const [newCredential, setNewCredential] = useState("");
   const [confirmCredential, setConfirmCredential] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [newSharedPin, setNewSharedPin] = useState("");
+  const [confirmSharedPin, setConfirmSharedPin] = useState("");
+  const [isUpdatingSharedPin, setIsUpdatingSharedPin] = useState(false);
   const [isStartingNewMonth, setIsStartingNewMonth] = useState(false);
   const [monthResetPassword, setMonthResetPassword] = useState("");
+  const [profileName, setProfileName] = useState(currentUser.name || "");
+  const [profilePhone, setProfilePhone] = useState(
+    (currentUser.phoneNumber || "").replace(/^\+91/, ""),
+  );
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   // State for admin phone number change
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -80,15 +89,18 @@ export default function SettingsPage() {
     }
   }, [currentUser, isAppConfigured, isAuthLoading, router]);
 
+  useEffect(() => {
+    setProfileName(currentUser.name || "");
+    setProfilePhone((currentUser.phoneNumber || "").replace(/^\+91/, ""));
+  }, [currentUser.name, currentUser.phoneNumber]);
+
   if (isAuthLoading || !currentUser) {
     return <SettingsShimmer />;
   }
 
-  const credentialType = isAdmin ? "Password" : "PIN";
-  const credentialLength = isAdmin ? undefined : 6;
-  const minCredentialLength = isAdmin ? 8 : 6;
-  const credentialHint = isAdmin ? "at least 8 characters" : "exactly 6 digits";
-  const inputType = isAdmin ? "password" : "text";
+  const credentialType = "Password";
+  const minCredentialLength = 8;
+  const credentialHint = "at least 8 characters";
   const dotPatternLight = {
     backgroundImage:
       "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E\")",
@@ -102,17 +114,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setIsUpdating(true);
 
-    if (newCredential.length !== minCredentialLength && !isAdmin) {
-      toast({
-        variant: "destructive",
-        title: `Invalid ${credentialType}`,
-        description: `${credentialType} must be ${credentialHint}.`,
-      });
-      setIsUpdating(false);
-      return;
-    }
-
-    if (newCredential.length < minCredentialLength && isAdmin) {
+    if (newCredential.length < minCredentialLength) {
       toast({
         variant: "destructive",
         title: `Invalid ${credentialType}`,
@@ -140,15 +142,6 @@ export default function SettingsPage() {
       });
       setNewCredential("");
       setConfirmCredential("");
-
-      // Log out user after credential change for security
-      setTimeout(() => {
-        toast({
-          title: `Security Update`,
-          description: "Please log in again with your new credentials.",
-        });
-        logout();
-      }, 1000);
     } else {
       toast({
         variant: "destructive",
@@ -157,6 +150,93 @@ export default function SettingsPage() {
       });
     }
     setIsUpdating(false);
+  };
+
+  const handleUpdateSharedPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!/^\d{6}$/.test(newSharedPin)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid PIN",
+        description: "Shared member PIN must be exactly 6 digits.",
+      });
+      return;
+    }
+
+    if (newSharedPin !== confirmSharedPin) {
+      toast({
+        variant: "destructive",
+        title: "PINs do not match",
+      });
+      return;
+    }
+
+    setIsUpdatingSharedPin(true);
+    try {
+      await updateSharedMemberPin(newSharedPin);
+      await addAdminAuditLog({
+        action: "member.pin.update",
+        metadata: { scope: "all-members" },
+      });
+      toast({
+        title: "Shared PIN updated",
+        description: "All member PINs were updated successfully.",
+      });
+      setNewSharedPin("");
+      setConfirmSharedPin("");
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setIsUpdatingSharedPin(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const trimmedName = profileName.trim();
+    if (!trimmedName) {
+      toast({
+        variant: "destructive",
+        title: "Invalid name",
+        description: "Name is required.",
+      });
+      return;
+    }
+
+    if (profilePhone && !/^[6-9]\d{9}$/.test(profilePhone)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid phone number",
+        description: "Enter a valid 10-digit Indian mobile number.",
+      });
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+    try {
+      await updateUserProfile(currentUser.id, {
+        name: trimmedName,
+        phoneNumber: profilePhone ? `+91${profilePhone}` : undefined,
+      });
+      toast({
+        title: "Profile updated",
+        description: "Your profile details were saved.",
+      });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setIsUpdatingProfile(false);
+    }
   };
 
   const handleUpdatePhoneNumber = async (e: React.FormEvent) => {
@@ -254,7 +334,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <PageHeader />
       <main className="relative flex-1 overflow-y-auto bg-slate-50 p-4 pb-20 dark:bg-slate-950 md:p-6 md:pb-6 lg:p-8">
         <div
@@ -278,66 +358,171 @@ export default function SettingsPage() {
             </p>
           </header>
 
-          <Card className="modern-surface w-full border-0 animate-soft-pop">
-            <CardHeader>
-              <CardTitle>Update Your Credentials</CardTitle>
-              <CardDescription>
-                {isAdmin
-                  ? "Update your admin password. It must be at least 8 characters long."
-                  : "Update your 6-digit member PIN."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="new-credential">New {credentialType}</Label>
-                  <Input
-                    id="new-credential"
-                    type={inputType}
-                    value={newCredential}
-                    onChange={(e) =>
-                      setNewCredential(
-                        isAdmin
-                          ? e.target.value
-                          : e.target.value.replace(/\D/g, ""),
-                      )
-                    }
-                    maxLength={credentialLength}
-                    placeholder={`Enter new ${credentialType}`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-credential">
-                    Confirm New {credentialType}
-                  </Label>
-                  <Input
-                    id="confirm-credential"
-                    type={inputType}
-                    value={confirmCredential}
-                    onChange={(e) =>
-                      setConfirmCredential(
-                        isAdmin
-                          ? e.target.value
-                          : e.target.value.replace(/\D/g, ""),
-                      )
-                    }
-                    maxLength={credentialLength}
-                    placeholder={`Confirm new ${credentialType}`}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={isUpdating}>
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    `Update ${credentialType}`
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          {isAdmin ? (
+            <>
+              <Card className="modern-surface w-full border-0 animate-soft-pop">
+                <CardHeader>
+                  <CardTitle>Update Admin Password</CardTitle>
+                  <CardDescription>
+                    Update your admin password. It must be at least 8 characters
+                    long.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-credential">
+                        New {credentialType}
+                      </Label>
+                      <Input
+                        id="new-credential"
+                        type="password"
+                        value={newCredential}
+                        onChange={(e) => setNewCredential(e.target.value)}
+                        placeholder={`Enter new ${credentialType}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-credential">
+                        Confirm New {credentialType}
+                      </Label>
+                      <Input
+                        id="confirm-credential"
+                        type="password"
+                        value={confirmCredential}
+                        onChange={(e) => setConfirmCredential(e.target.value)}
+                        placeholder={`Confirm new ${credentialType}`}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        `Update ${credentialType}`
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="modern-surface w-full border-0 animate-soft-pop">
+                <CardHeader>
+                  <CardTitle>Update Shared Member PIN</CardTitle>
+                  <CardDescription>
+                    Set one 6-digit PIN for all non-admin members.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleUpdateSharedPin} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-shared-pin">New shared PIN</Label>
+                      <Input
+                        id="new-shared-pin"
+                        type="password"
+                        value={newSharedPin}
+                        maxLength={6}
+                        onChange={(e) =>
+                          setNewSharedPin(e.target.value.replace(/\D/g, ""))
+                        }
+                        placeholder="Enter 6-digit PIN"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-shared-pin">
+                        Confirm shared PIN
+                      </Label>
+                      <Input
+                        id="confirm-shared-pin"
+                        type="password"
+                        value={confirmSharedPin}
+                        maxLength={6}
+                        onChange={(e) =>
+                          setConfirmSharedPin(e.target.value.replace(/\D/g, ""))
+                        }
+                        placeholder="Confirm 6-digit PIN"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isUpdatingSharedPin}
+                    >
+                      {isUpdatingSharedPin ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        "Update Shared PIN"
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card className="modern-surface w-full border-0 animate-soft-pop">
+              <CardHeader>
+                <CardTitle>Edit Profile</CardTitle>
+                <CardDescription>
+                  Update your name and phone number.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateProfile} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-name">Name</Label>
+                    <Input
+                      id="profile-name"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      placeholder="Enter your name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-phone">Phone Number</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        +91
+                      </span>
+                      <Input
+                        id="profile-phone"
+                        type="tel"
+                        value={profilePhone}
+                        onChange={(e) =>
+                          setProfilePhone(e.target.value.replace(/\D/g, ""))
+                        }
+                        placeholder="9876543210"
+                        maxLength={10}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isUpdatingProfile}
+                  >
+                    {isUpdatingProfile ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Profile"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
 
           {isAdmin && (
             <>

@@ -27,11 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { initializeTrackerInstance, isGroupIdAvailable } from "@/lib/firestore";
 import { CheckCircle2 } from "lucide-react";
-import type {
-  SetupMemberInput,
-  TrackerSetupPayload,
-  TrackerTheme,
-} from "@/lib/types";
+import type { SetupMemberInput, TrackerSetupPayload } from "@/lib/types";
 
 type SetupStep = "group" | "members" | "memberDetails" | "admin" | "review";
 
@@ -100,7 +96,6 @@ export default function SetupPage() {
   const [adminIndex, setAdminIndex] = useState(0);
   const [adminPassword, setAdminPassword] = useState("");
   const [sharedMemberPin, setSharedMemberPin] = useState("");
-  const [themePreference] = useState<TrackerTheme>("system");
   const [adminPhoneNumber, setAdminPhoneNumber] = useState("");
   const [isCheckingGroupId, setIsCheckingGroupId] = useState(false);
   const [isGroupIdAvailableState, setIsGroupIdAvailableState] = useState<
@@ -325,7 +320,6 @@ export default function SetupPage() {
       })),
       adminIndex,
       adminPassword,
-      themePreference,
     };
 
     setIsSubmitting(true);
@@ -719,12 +713,6 @@ export default function SetupPage() {
                       <p className="text-sm text-muted-foreground">Admin</p>
                       <p className="font-medium">
                         {members[adminIndex]?.name || "Not selected"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Theme</p>
-                      <p className="font-medium capitalize">
-                        {themePreference}
                       </p>
                     </div>
                   </div>
