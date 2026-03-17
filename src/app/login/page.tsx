@@ -34,7 +34,6 @@ export default function LoginPage() {
     users,
     activeGroupId,
     selectGroup,
-    refreshGroupDirectory,
     clearSelectedGroup,
   } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -46,10 +45,6 @@ export default function LoginPage() {
       router.push("/");
     }
   }, [currentUser, isAuthLoading, router]);
-
-  useEffect(() => {
-    refreshGroupDirectory();
-  }, [refreshGroupDirectory]);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -172,7 +167,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
       <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
       <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card shadow-2xl">
+      <Card className="isolate w-full max-w-md overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl">
         <CardHeader className="items-center pb-2 text-center">
           <Logo className="mb-3 h-14 w-14" />
           <CardTitle className="text-3xl tracking-tight">Sign In</CardTitle>
@@ -205,7 +200,7 @@ export default function LoginPage() {
               </div>
             </div>
           ) : (
-            <div className="mb-5 rounded-2xl border border-border/70 bg-muted/35 p-4 text-sm">
+            <div className="mb-5 rounded-2xl border border-border/70 bg-muted p-4 text-sm">
               <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Active group
               </div>
@@ -276,18 +271,11 @@ export default function LoginPage() {
                 Select your group first, then sign in with your name and PIN or
                 password.
               </p>
-              <Button
-                variant="outline"
-                className="h-11 w-full"
-                onClick={() => refreshGroupDirectory()}
-              >
-                Refresh
-              </Button>
             </div>
           )}
         </CardContent>
         <div className="border-t border-border/70 px-6 pb-6 pt-4">
-          <div className="rounded-2xl border border-border/70 bg-muted/30 p-3">
+          <div className="rounded-2xl border border-border/70 bg-muted p-3">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Quick Links
             </p>

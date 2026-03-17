@@ -67,9 +67,9 @@ export default function SettingsPage() {
   const [isUpdatingSharedPin, setIsUpdatingSharedPin] = useState(false);
   const [isStartingNewMonth, setIsStartingNewMonth] = useState(false);
   const [monthResetPassword, setMonthResetPassword] = useState("");
-  const [profileName, setProfileName] = useState(currentUser.name || "");
+  const [profileName, setProfileName] = useState(currentUser?.name || "");
   const [profilePhone, setProfilePhone] = useState(
-    (currentUser.phoneNumber || "").replace(/^\+91/, ""),
+    (currentUser?.phoneNumber || "").replace(/^\+91/, ""),
   );
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
@@ -90,9 +90,9 @@ export default function SettingsPage() {
   }, [currentUser, isAppConfigured, isAuthLoading, router]);
 
   useEffect(() => {
-    setProfileName(currentUser.name || "");
-    setProfilePhone((currentUser.phoneNumber || "").replace(/^\+91/, ""));
-  }, [currentUser.name, currentUser.phoneNumber]);
+    setProfileName(currentUser?.name || "");
+    setProfilePhone((currentUser?.phoneNumber || "").replace(/^\+91/, ""));
+  }, [currentUser]);
 
   if (isAuthLoading || !currentUser) {
     return <SettingsShimmer />;

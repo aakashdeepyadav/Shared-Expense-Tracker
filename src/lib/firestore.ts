@@ -112,16 +112,6 @@ export async function verifyStoredCredential(
   return normalizedStored === normalizedCandidate;
 }
 
-function generateGroupId(groupName: string): string {
-  const slug = groupName
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${slug || 'group'}-${suffix}`;
-}
-
 function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }

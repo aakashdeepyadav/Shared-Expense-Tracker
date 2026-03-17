@@ -31,6 +31,17 @@ This project uses a single app-owned Firebase project.
   3. Create members and start operations.
 - Group-scoped data model under `groups/{groupId}`.
 
+## Project Structure
+
+Top-level folders and purpose:
+
+- `src/app` - routes, page-level UI, app layout
+- `src/components` - reusable UI and feature components
+- `src/context` - auth/session context and app state providers
+- `src/hooks` - custom React hooks
+- `src/lib` - Firebase integration, Firestore access layer, shared utilities
+- `src/ai` - Genkit/AI-related flows and development entry points
+
 ## Firestore Data Model
 
 Each group stores data under the following collections/documents:
@@ -152,6 +163,29 @@ Recommended pre-deploy checklist:
 2. `npm run typecheck`
 3. `npm run build`
 4. Deploy Firestore rules and indexes
+
+## Production Readiness Check (2026-03-18)
+
+This repository was validated with the following checks:
+
+- `npm run lint` -> passed
+- `npm run typecheck` -> passed
+- `npm run build` -> passed (all app routes generated)
+
+Additional dependency security check:
+
+- `npm audit --omit=dev` -> reported low/moderate issues in transitive dependencies (not build-blocking)
+
+Recommended actions:
+
+1. Run `npm audit fix` and retest (`lint`, `typecheck`, `build`).
+2. Keep Next.js and Firebase ecosystem dependencies updated regularly.
+3. Continue enforcing Firebase App Check + Firestore rules in production.
+
+Operational notes:
+
+- `Start New Month` requires deployed `firestore.rules` that allow archive/write + live collection cleanup.
+- If production behavior differs from local, deploy rules/indexes first, then retest.
 
 ## Scripts
 

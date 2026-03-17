@@ -218,43 +218,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const loadActiveGroupData = useCallback(async (groupId?: string) => {
-    const resolvedGroupId = groupId || getActiveGroupId();
-    setActiveGroupIdState(resolvedGroupId || null);
+  const loadActiveGroupData = useCallback(
+    async (groupId?: string) => {
+      const resolvedGroupId = groupId || getActiveGroupId();
+      setActiveGroupIdState(resolvedGroupId || null);
 
-    if (!resolvedGroupId) {
-      setAppConfig(null);
-      setIsAppConfigured(false);
-      setUsers([]);
-      return;
-    }
-
-    if (!auth.currentUser) {
-      await ensureFirebaseSession();
-    }
-
-    const loadedConfig = await getAppConfig(resolvedGroupId);
-    setAppConfig(loadedConfig);
-    setIsAppConfigured(!!loadedConfig?.initialized);
-
-    if (!loadedConfig?.initialized) {
-      setUsers([]);
-      return;
-    }
-
-    try {
-      const fetchedUsers = await getAllUsers();
-      setUsers(fetchedUsers);
-    } catch (usersError: unknown) {
-      if (!isPermissionDeniedError(usersError)) {
-        console.warn(
-          "Users prefetch skipped during initialization:",
-          getErrorMessage(usersError),
-        );
+      if (!resolvedGroupId) {
+        setAppConfig(null);
+        setIsAppConfigured(false);
+        setUsers([]);
+        return;
       }
-      setUsers([]);
-    }
-  }, []);
+
+      if (!auth.currentUser) {
+        await ensureFirebaseSession();
+      }
+
+      const loadedConfig = await getAppConfig(resolvedGroupId);
+      setAppConfig(loadedConfig);
+      setIsAppConfigured(!!loadedConfig?.initialized);
+
+      if (!loadedConfig?.initialized) {
+        setUsers([]);
+        return;
+      }
+
+      try {
+        const fetchedUsers = await getAllUsers();
+        setUsers(fetchedUsers);
+      } catch (usersError: unknown) {
+        if (!isPermissionDeniedError(usersError)) {
+          console.warn(
+            "Users prefetch skipped during initialization:",
+            getErrorMessage(usersError),
+          );
+        }
+        setUsers([]);
+      }
+    },
+    [ensureFirebaseSession],
+  );
 
   // --- Init app and users ---
   useEffect(() => {
