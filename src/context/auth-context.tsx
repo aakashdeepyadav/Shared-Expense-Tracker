@@ -429,7 +429,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const matchedUser = users.find(
+    let candidateUsers = users;
+    if (candidateUsers.length === 0) {
+      try {
+        await ensureFirebaseSession();
+        candidateUsers = await getAllUsers();
+        setUsers(candidateUsers);
+      } catch {
+        return {
+          success: false,
+          message:
+            "Could not load account list for this group. Check Firebase Authentication (Anonymous sign-in) and Firestore rules deployment.",
+        };
+      }
+    }
+
+    const matchedUser = candidateUsers.find(
       (user) => user.name.toLowerCase() === typedName.toLowerCase(),
     );
 
