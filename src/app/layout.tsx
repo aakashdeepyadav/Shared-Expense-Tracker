@@ -46,7 +46,6 @@ function AppLayout({
   const router = useRouter();
   const [isMounted, setIsMounted] = React.useState(false);
   const isAuthPage = pathname === "/login" || pathname === "/setup";
-  const isDashboardPage = pathname === "/";
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -134,8 +133,8 @@ function AppLayout({
   return (
     <>
       <OfflineBanner />
-      <SidebarProvider>
-        <div className="page-shell flex min-h-screen">
+      <SidebarProvider className="flex-col">
+        <div className="page-shell flex min-h-screen w-full">
           <AppSidebar />
           <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
             <div className="w-full">{children}</div>
