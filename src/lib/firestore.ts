@@ -238,9 +238,33 @@ export async function isAppInitialized(): Promise<boolean> {
   return !!appConfig?.initialized;
 }
 
+export async function isGroupIdAvailable(groupId: string): Promise<boolean> {
+  const sanitized = sanitizeGroupId(groupId);
+  if (!sanitized || !/^[a-z0-9-]{3,30}$/.test(sanitized)) {
+    return false;
+  }
+
+  const rootRef = groupRootDoc(sanitized);
+  const rootSnapshot = await getDoc(rootRef);
+  if (rootSnapshot.exists()) {
+    return false;
+  }
+
+  const appConfigRef = groupConfigDoc(sanitized, 'app');
+  const appConfigSnapshot = await getDoc(appConfigRef);
+  return !appConfigSnapshot.exists();
+}
+
 export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<string> {
-  if (!payload.groupName.trim()) {
-    throw new Error('Group name is required.');
+  const requestedGroupId = sanitizeGroupId(payload.groupId || payload.groupName);
+  if (!requestedGroupId) {
+    throw new Error('Group ID is required.');
+  }
+  if (!/^[a-z0-9-]{3,30}$/.test(requestedGroupId)) {
+    throw new Error('Group ID must be 3-30 chars with lowercase letters, numbers, and hyphens only.');
+  }
+  if (/\s/.test(payload.groupName || payload.groupId || '')) {
+    throw new Error('Group ID cannot contain spaces.');
   }
   if (!payload.members.length) {
     throw new Error('At least one member is required.');
@@ -270,29 +294,20 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     throw new Error('Admin password must be at least 8 characters.');
   }
 
-  let groupId = sanitizeGroupId(payload.groupId || generateGroupId(payload.groupName));
-  if (!groupId) {
-    groupId = generateGroupId(payload.groupName);
-  }
-
-  // Ensure we never overwrite an existing group.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const rootSnapshot = await getDoc(groupRootDoc(groupId));
-    if (!rootSnapshot.exists()) {
-      break;
-    }
-    if ((rootSnapshot.data()?.initialized as boolean) === true) {
-      groupId = generateGroupId(payload.groupName);
-    }
-  }
+  const groupId = requestedGroupId;
 
   const rootRef = groupRootDoc(groupId);
   const appConfigRef = groupConfigDoc(groupId, 'app');
   const adminConfigRef = groupConfigDoc(groupId, 'admin');
 
+  const existingRoot = await getDoc(rootRef);
+  if (existingRoot.exists()) {
+    throw new Error('This group ID is already in use. Please choose a different group ID.');
+  }
+
   const existingConfig = await getDoc(appConfigRef);
-  if (existingConfig.exists() && existingConfig.data()?.initialized) {
-    throw new Error('This group ID is already initialized. Please try a different group.');
+  if (existingConfig.exists()) {
+    throw new Error('This group ID is already initialized. Please choose a different group ID.');
   }
 
   const batch = writeBatch(db);
@@ -336,7 +351,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   const appConfigPayload = {
     initialized: true,
     groupId,
-    groupName: payload.groupName.trim(),
+    groupName: groupId,
     groupImageUrl: payload.groupImageUrl || null,
     memberTypeLabel: payload.memberTypeLabel || 'member',
     adminName: adminMember.name,
@@ -351,7 +366,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
 
   batch.set(rootRef, {
     initialized: true,
-    groupName: payload.groupName.trim(),
+    groupName: groupId,
     groupImageUrl: payload.groupImageUrl || null,
     memberTypeLabel: payload.memberTypeLabel || 'member',
     createdAt: nowIso,

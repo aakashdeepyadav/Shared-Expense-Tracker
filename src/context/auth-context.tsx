@@ -99,6 +99,31 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 5;
 const LOCAL_USER_ID_KEY = "shared-expense-tracker-userid";
 
+const getStoredUserId = () => {
+  if (typeof window === "undefined") return null;
+  const sessionUserId = sessionStorage.getItem(LOCAL_USER_ID_KEY);
+  if (sessionUserId) return sessionUserId;
+
+  // Clear legacy persistent login so opening a new tab requires credentials.
+  const legacyUserId = localStorage.getItem(LOCAL_USER_ID_KEY);
+  if (legacyUserId) {
+    localStorage.removeItem(LOCAL_USER_ID_KEY);
+  }
+  return null;
+};
+
+const setStoredUserId = (userId: string) => {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(LOCAL_USER_ID_KEY, userId);
+  localStorage.removeItem(LOCAL_USER_ID_KEY);
+};
+
+const clearStoredUserId = () => {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(LOCAL_USER_ID_KEY);
+  localStorage.removeItem(LOCAL_USER_ID_KEY);
+};
+
 // --- Helper functions (lockout logic) ---
 const getAttemptsKey = (role: "admin" | "member", userId?: string) =>
   role === "admin" ? "login-attempts-admin" : `login-attempts-${userId}`;
@@ -225,7 +250,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const unsubscribe = onAuthStateChanged(auth, async () => {
         try {
-          const storedUserId = localStorage.getItem(LOCAL_USER_ID_KEY);
+          const storedUserId = getStoredUserId();
           if (storedUserId) {
             await ensureFirebaseSession();
             const appUser = await getUser(storedUserId);
@@ -235,12 +260,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               setCurrentUser(null);
               setIsAdmin(false);
-              localStorage.removeItem(LOCAL_USER_ID_KEY);
+              clearStoredUserId();
             }
           } else {
             setCurrentUser(null);
             setIsAdmin(false);
-            localStorage.removeItem(LOCAL_USER_ID_KEY);
+            clearStoredUserId();
           }
         } catch (authStateError) {
           if (!isPermissionDeniedError(authStateError)) {
@@ -251,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setCurrentUser(null);
           setIsAdmin(false);
-          localStorage.removeItem(LOCAL_USER_ID_KEY);
+          clearStoredUserId();
         } finally {
           setIsAuthLoading(false);
         }
@@ -276,7 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUsers([]);
     setCurrentUser(null);
     setIsAdmin(false);
-    localStorage.removeItem(LOCAL_USER_ID_KEY);
+    clearStoredUserId();
     await signOut(auth).catch(() => {
       // noop
     });
@@ -292,7 +317,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signOut(auth).catch(() => {
         // noop
       });
-      localStorage.removeItem(LOCAL_USER_ID_KEY);
+      clearStoredUserId();
       setCurrentUser(null);
       setIsAdmin(false);
 
@@ -411,7 +436,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
         };
       }
-      localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
+      setStoredUserId("admin");
       setCurrentUser(matchedUser);
       setIsAdmin(true);
       router.push("/");
@@ -441,7 +466,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
       };
     }
-    localStorage.setItem(LOCAL_USER_ID_KEY, matchedUser.id);
+    setStoredUserId(matchedUser.id);
     setCurrentUser(matchedUser);
     setIsAdmin(false);
     router.push("/");
@@ -478,7 +503,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
           };
         }
-        localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
+        setStoredUserId("admin");
         setCurrentUser(adminUser);
         setIsAdmin(true);
         clearLoginAttempts(key);
@@ -493,12 +518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- Logout ---
   const logout = async () => {
-    localStorage.removeItem(LOCAL_USER_ID_KEY);
-    setCurrentUser(null);
-    setIsAdmin(false);
-    await signOut(auth).catch(() => {
-      // noop
-    });
+    await clearSelectedGroup();
     router.push("/login");
   };
 
@@ -506,7 +526,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getToken = async (): Promise<string | null> => {
     if (isAdmin) {
       // For admin, the "token" is just the raw value in local storage.
-      return localStorage.getItem(LOCAL_USER_ID_KEY);
+      return getStoredUserId();
     }
     if (auth.currentUser) {
       // For regular users, it's the Firebase ID token.

@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
-import { initializeTrackerInstance } from "@/lib/firestore";
+import { initializeTrackerInstance, isGroupIdAvailable } from "@/lib/firestore";
 import { CheckCircle2 } from "lucide-react";
 import type {
   SetupMemberInput,
@@ -43,6 +43,7 @@ const setupSteps: SetupStep[] = [
   "review",
 ];
 const MAX_IMAGE_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+const GROUP_ID_REGEX = /^[a-z0-9-]{3,30}$/;
 
 const defaultMember = (): SetupMemberInput => ({
   name: "",
@@ -71,14 +72,14 @@ function validateImageFile(file: File): string | null {
   return null;
 }
 
-function generateGroupIdForSetup(groupName: string): string {
-  const slug = groupName
+function normalizeGroupIdInput(value: string): string {
+  return value
     .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${slug || "group"}-${suffix}`;
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 30);
 }
 
 export default function SetupPage() {
@@ -98,23 +99,28 @@ export default function SetupPage() {
   );
   const [adminIndex, setAdminIndex] = useState(0);
   const [adminPassword, setAdminPassword] = useState("");
+  const [sharedMemberPin, setSharedMemberPin] = useState("");
   const [themePreference] = useState<TrackerTheme>("system");
   const [adminPhoneNumber, setAdminPhoneNumber] = useState("");
+  const [isCheckingGroupId, setIsCheckingGroupId] = useState(false);
+  const [isGroupIdAvailableState, setIsGroupIdAvailableState] = useState<
+    boolean | null
+  >(null);
 
   const stepIndex = setupSteps.indexOf(currentStep);
 
   const canContinue = useMemo(() => {
-    if (currentStep === "group") return groupName.trim().length > 1;
+    if (currentStep === "group")
+      return GROUP_ID_REGEX.test(groupName) && isGroupIdAvailableState === true;
     if (currentStep === "members") return memberCount >= 2;
     if (currentStep === "memberDetails")
-      return members.every(
-        (m) => m.name.trim() && /^\d{6}$/.test(m.pin.trim()),
-      );
+      return members.every((m) => m.name.trim().length > 0);
     if (currentStep === "admin")
       return (
         adminIndex >= 0 &&
         adminIndex < members.length &&
         adminPassword.trim().length >= 8 &&
+        /^\d{6}$/.test(sharedMemberPin) &&
         /^[6-9]\d{9}$/.test(adminPhoneNumber)
       );
     return true;
@@ -125,17 +131,18 @@ export default function SetupPage() {
     members,
     adminIndex,
     adminPassword,
+    sharedMemberPin,
     adminPhoneNumber,
+    isGroupIdAvailableState,
   ]);
 
   const getStepCompletion = (step: SetupStep): number => {
-    if (step === "group") return groupName.trim().length > 1 ? 1 : 0;
+    if (step === "group") return GROUP_ID_REGEX.test(groupName) ? 1 : 0;
     if (step === "members") return memberCount >= 2 ? 1 : 0;
     if (step === "memberDetails") {
       if (members.length === 0) return 0;
       const completed = members.filter(
-        (member) =>
-          member.name.trim().length > 0 && /^\d{6}$/.test(member.pin.trim()),
+        (member) => member.name.trim().length > 0,
       ).length;
       return completed / members.length;
     }
@@ -143,8 +150,11 @@ export default function SetupPage() {
       const selectedAdmin =
         adminIndex >= 0 && adminIndex < members.length ? 1 : 0;
       const passwordProgress = Math.min(adminPassword.trim().length / 8, 1);
+      const pinProgress = /^\d{6}$/.test(sharedMemberPin) ? 1 : 0;
       const phoneProgress = /^[6-9]\d{9}$/.test(adminPhoneNumber) ? 1 : 0;
-      return (selectedAdmin + passwordProgress + phoneProgress) / 3;
+      return (
+        (selectedAdmin + passwordProgress + pinProgress + phoneProgress) / 4
+      );
     }
     return 1;
   };
@@ -181,13 +191,13 @@ export default function SetupPage() {
   const stepDescription = useMemo(() => {
     switch (currentStep) {
       case "group":
-        return "Create your group profile in your app&apos;s Firebase project.";
+        return "Choose a unique group ID (lowercase letters, numbers, hyphens, no spaces).";
       case "members":
         return "Define member count and member type label.";
       case "memberDetails":
-        return "Add name, PIN, phone and optional profile image.";
+        return "Add name, phone and optional profile image.";
       case "admin":
-        return "Choose an admin member and set admin password.";
+        return "Choose an admin member, set admin password, and one shared member PIN.";
       case "review":
         return "Confirm details and create your group.";
       default:
@@ -224,6 +234,37 @@ export default function SetupPage() {
       .slice(-10);
     setAdminPhoneNumber(phone);
   }, [adminIndex, members]);
+
+  useEffect(() => {
+    const trimmed = groupName.trim();
+    if (!trimmed) {
+      setIsGroupIdAvailableState(null);
+      setIsCheckingGroupId(false);
+      return;
+    }
+
+    if (!GROUP_ID_REGEX.test(trimmed)) {
+      setIsGroupIdAvailableState(false);
+      setIsCheckingGroupId(false);
+      return;
+    }
+
+    setIsCheckingGroupId(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const available = await isGroupIdAvailable(trimmed);
+        setIsGroupIdAvailableState(available);
+      } catch {
+        setIsGroupIdAvailableState(null);
+      } finally {
+        setIsCheckingGroupId(false);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [groupName]);
 
   const handleGroupImageUpload = async (file: File | undefined) => {
     if (!file) return;
@@ -272,15 +313,16 @@ export default function SetupPage() {
     if (!canContinue) return;
 
     const payload: TrackerSetupPayload = {
-      groupId: generateGroupIdForSetup(groupName),
+      groupId: groupName,
       groupName,
       groupImageUrl: groupImageUrl || undefined,
       memberTypeLabel,
-      members: members.map((member, index) =>
-        index === adminIndex
-          ? { ...member, phoneNumber: adminPhoneNumber }
-          : member,
-      ),
+      members: members.map((member, index) => ({
+        ...member,
+        pin: sharedMemberPin,
+        phoneNumber:
+          index === adminIndex ? adminPhoneNumber : member.phoneNumber,
+      })),
       adminIndex,
       adminPassword,
       themePreference,
@@ -408,13 +450,40 @@ export default function SetupPage() {
               {currentStep === "group" && (
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="group-name">Group name</Label>
+                    <Label htmlFor="group-name">Group ID</Label>
                     <Input
                       id="group-name"
                       value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="Flat-2"
+                      onChange={(e) =>
+                        setGroupName(normalizeGroupIdInput(e.target.value))
+                      }
+                      placeholder="flat2"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Use 3-30 characters: lowercase letters, numbers, and
+                      hyphens only.
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        isCheckingGroupId
+                          ? "text-muted-foreground"
+                          : isGroupIdAvailableState === true
+                            ? "text-emerald-600"
+                            : isGroupIdAvailableState === false &&
+                                GROUP_ID_REGEX.test(groupName)
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                      }`}
+                    >
+                      {isCheckingGroupId
+                        ? "Checking group ID availability..."
+                        : isGroupIdAvailableState === true
+                          ? "Group ID is available."
+                          : isGroupIdAvailableState === false &&
+                              GROUP_ID_REGEX.test(groupName)
+                            ? "Group ID already exists. Choose another one."
+                            : ""}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="group-image">Group image</Label>
@@ -502,19 +571,6 @@ export default function SetupPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>PIN (6 digits)</Label>
-                          <Input
-                            value={member.pin}
-                            maxLength={6}
-                            onChange={(e) =>
-                              updateMember(index, {
-                                pin: e.target.value.replace(/\D/g, ""),
-                              })
-                            }
-                            placeholder="123456"
-                          />
-                        </div>
-                        <div className="space-y-2">
                           <Label>Phone (optional)</Label>
                           <Input
                             value={member.phoneNumber || ""}
@@ -587,6 +643,21 @@ export default function SetupPage() {
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
                         placeholder="At least 8 characters"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="shared-member-pin">
+                        Shared PIN (non-admin members)
+                      </Label>
+                      <Input
+                        id="shared-member-pin"
+                        type="password"
+                        value={sharedMemberPin}
+                        onChange={(e) =>
+                          setSharedMemberPin(e.target.value.replace(/\D/g, ""))
+                        }
+                        maxLength={6}
+                        placeholder="6-digit PIN for non-admin members"
                       />
                     </div>
                   </div>

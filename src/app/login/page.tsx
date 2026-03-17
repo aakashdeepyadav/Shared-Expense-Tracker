@@ -12,6 +12,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -23,7 +24,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [groupIdInput, setGroupIdInput] = useState("");
   const [loginName, setLoginName] = useState("");
-  const [password, setPassword] = useState("");
+  const [credential, setCredential] = useState("");
   const { toast } = useToast();
   const {
     loginWithCredentials,
@@ -54,7 +55,7 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     const result = await loginWithCredentials({
       name: loginName,
-      password,
+      password: credential,
     });
 
     if (!result.success) {
@@ -79,7 +80,7 @@ export default function LoginPage() {
       });
     }
     if (!result.lockedUntil) {
-      setPassword("");
+      setCredential("");
     }
   };
 
@@ -106,7 +107,10 @@ export default function LoginPage() {
   };
 
   const resetLoginFlow = () => {
-    setPassword("");
+    setCredential("");
+    setLoginName("");
+    setLockoutTime(0);
+    setTimeRemaining(0);
   };
 
   const getButtonText = () => {
@@ -143,32 +147,35 @@ export default function LoginPage() {
     return null;
   }
 
-  if (!isAppConfigured) {
-    return (
-      <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
-          style={dotPatternLight}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
-          style={dotPatternDark}
-        />
-        <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
-        <div className="pointer-events-none absolute right-12 bottom-12 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-        <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
-          <CardHeader className="items-center pb-2 text-center">
-            <Logo className="mb-3 h-14 w-14" />
-            <CardTitle className="text-2xl tracking-tight">
-              Welcome to Shared Expense Tracker
-            </CardTitle>
-            <CardDescription>
-              Join an existing group or create a new one.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="group-id-input">Join by group ID</Label>
+  const hasSelectedGroup = Boolean(isAppConfigured && activeGroupId);
+
+  return (
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+        style={dotPatternLight}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+        style={dotPatternDark}
+      />
+      <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+      <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
+      <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
+      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
+        <CardHeader className="items-center pb-2 text-center">
+          <Logo className="mb-3 h-14 w-14" />
+          <CardTitle className="text-3xl tracking-tight">Sign In</CardTitle>
+          <CardDescription>
+            {hasSelectedGroup
+              ? `Secure access to ${appConfig?.groupName || "your group"}`
+              : "Enter your group ID to continue"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!hasSelectedGroup ? (
+            <div className="mb-5 space-y-2">
+              <Label htmlFor="group-id-input">Group ID</Label>
               <div className="flex gap-2">
                 <Input
                   id="group-id-input"
@@ -187,58 +194,19 @@ export default function LoginPage() {
                 </Button>
               </div>
             </div>
-            <Button className="h-11 w-full" asChild>
-              <Link href="/setup">
-                Signup
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 w-full"
-              onClick={() => refreshGroupDirectory()}
-            >
-              Refresh
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
-        style={dotPatternLight}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
-        style={dotPatternDark}
-      />
-      <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
-      <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
-      <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
-      <Card className="w-full max-w-md rounded-3xl border border-border/80 bg-card/95 shadow-2xl">
-        <CardHeader className="items-center pb-2 text-center">
-          <Logo className="mb-3 h-14 w-14" />
-          <CardTitle className="text-3xl tracking-tight">
-            Sign in to {appConfig?.groupName || "your group"}
-          </CardTitle>
-          <CardDescription>Secure access to your shared wallet</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-5 rounded-2xl border border-border/70 bg-muted/35 p-4 text-sm">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Active group
+          ) : (
+            <div className="mb-5 rounded-2xl border border-border/70 bg-muted/35 p-4 text-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Active group
+              </div>
+              <div className="mt-1 text-base font-semibold">
+                {appConfig?.groupName || activeGroupId}
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                ID: {activeGroupId}
+              </div>
             </div>
-            <div className="mt-1 text-base font-semibold">
-              {appConfig?.groupName || activeGroupId}
-            </div>
-            <div className="mt-1 text-muted-foreground">
-              ID: {activeGroupId}
-            </div>
-          </div>
+          )}
           {isLocked && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
@@ -249,46 +217,73 @@ export default function LoginPage() {
               </AlertDescription>
             </Alert>
           )}
-          <div className="space-y-5">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login-name-input">Name</Label>
-                <Input
-                  id="login-name-input"
-                  value={loginName}
-                  onChange={(e) => setLoginName(e.target.value)}
-                  placeholder="Type your name"
-                  className="h-12 rounded-xl"
-                  disabled={isLoggingIn || isLocked}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                />
+          {hasSelectedGroup ? (
+            <div className="space-y-5">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-name-input">Name</Label>
+                  <Input
+                    id="login-name-input"
+                    value={loginName}
+                    onChange={(e) => setLoginName(e.target.value)}
+                    placeholder="Type your name"
+                    className="h-12 rounded-xl"
+                    disabled={isLoggingIn || isLocked}
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password-input">{credentialLabel}</Label>
+                  <Input
+                    id="password-input"
+                    type="password"
+                    value={credential}
+                    onChange={(e) => setCredential(e.target.value)}
+                    placeholder={credentialPlaceholder}
+                    className="h-12 rounded-xl"
+                    disabled={isLoggingIn || isLocked}
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password-input">{credentialLabel}</Label>
-                <Input
-                  id="password-input"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={credentialPlaceholder}
-                  className="h-12 rounded-xl"
-                  disabled={isLoggingIn || isLocked}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                />
-              </div>
-            </div>
 
-            <Button
-              onClick={handleLogin}
-              className="h-12 w-full rounded-xl text-base"
-              disabled={
-                isLoggingIn || isLocked || !loginName.trim() || !password.trim()
-              }
-            >
-              {getButtonText()}
-            </Button>
-          </div>
+              <Button
+                onClick={handleLogin}
+                className="h-12 w-full rounded-xl text-base"
+                disabled={
+                  isLoggingIn ||
+                  isLocked ||
+                  !loginName.trim() ||
+                  !credential.trim()
+                }
+              >
+                {getButtonText()}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Select your group first, then sign in with your name and PIN or
+                password.
+              </p>
+              <Button
+                variant="outline"
+                className="h-11 w-full"
+                onClick={() => refreshGroupDirectory()}
+              >
+                Refresh
+              </Button>
+            </div>
+          )}
         </CardContent>
+        <CardFooter className="justify-center pt-0">
+          <Button variant="link" asChild className="h-auto p-0 text-sm">
+            <Link href="/setup">
+              New group? Signup
+              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   );
