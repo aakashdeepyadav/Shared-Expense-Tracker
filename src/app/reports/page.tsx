@@ -288,7 +288,7 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 @container animate-fade-up">
-      <div className="mx-auto w-full max-w-7xl">
+      <div className="mx-auto w-full">
         <div className="flex flex-col @lg:flex-row @lg:items-center @lg:justify-between gap-4 mb-6 print:hidden">
           <div>
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">

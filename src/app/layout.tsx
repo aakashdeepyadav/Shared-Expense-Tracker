@@ -138,11 +138,7 @@ function AppLayout({
         <div className="page-shell flex min-h-screen">
           <AppSidebar />
           <main className="relative flex-1 min-w-0 pb-16 md:pb-0">
-            <div
-              className={cn("w-full", !isDashboardPage && "mx-auto max-w-7xl")}
-            >
-              {children}
-            </div>
+            <div className="w-full">{children}</div>
             <AppSignature />
           </main>
         </div>

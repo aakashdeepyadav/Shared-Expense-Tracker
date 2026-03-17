@@ -119,7 +119,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="mx-auto w-full space-y-6">
         <header>
           <h1 className="text-2xl font-bold font-headline">Audit Logs</h1>
           <p className="text-muted-foreground">

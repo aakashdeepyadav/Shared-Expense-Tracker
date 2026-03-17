@@ -142,7 +142,7 @@ export default function ContributionHistoryPage() {
     <div className="flex h-screen flex-col">
       <PageHeader />
       <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
-        <div className="mx-auto w-full max-w-6xl animate-fade-up">
+        <div className="mx-auto w-full animate-fade-up">
           <header className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">
               Contribution History

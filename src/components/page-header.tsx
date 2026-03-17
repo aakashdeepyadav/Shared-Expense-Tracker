@@ -52,7 +52,7 @@ export function PageHeader({
 
   return (
     <header className="sticky top-0 z-10 px-2 pt-2 animate-fade-up md:px-4 md:pt-3">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 rounded-2xl border border-white/45 bg-white/75 px-3 shadow-md backdrop-blur-md md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/70">
+      <div className="mx-auto flex h-16 w-full items-center gap-3 rounded-2xl border border-white/45 bg-white/75 px-3 shadow-md backdrop-blur-md md:gap-4 md:px-6 dark:border-white/10 dark:bg-slate-900/70">
         <div className="md:hidden">
           <SidebarTrigger />
         </div>

@@ -93,7 +93,7 @@ export default function ChatPage() {
     <div className="flex flex-col h-screen">
       <PageHeader />
       <main className="flex-1 flex flex-col p-3 md:p-6 pb-20 md:pb-6">
-        <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full max-w-7xl mx-auto border-0 p-3 md:p-5">
+        <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full mx-auto border-0 p-3 md:p-5">
           <div className="flex-1 overflow-y-auto space-y-4 md:space-y-6 pr-1 md:pr-2">
             {messages.map((msg) => {
               const isOwnMessage = msg.userId === currentUser.id;
