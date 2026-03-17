@@ -430,11 +430,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearLoginAttempts(getAttemptsKey("admin"));
       const hasSession = await ensureFirebaseSession();
       if (!hasSession) {
-        return {
-          success: false,
-          message:
-            "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
-        };
+        console.warn(
+          "Firebase anonymous session was not created. Continuing with app credentials.",
+        );
       }
       setStoredUserId("admin");
       setCurrentUser(matchedUser);
@@ -460,11 +458,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearLoginAttempts(getAttemptsKey("member", matchedUser.id));
     const hasSession = await ensureFirebaseSession();
     if (!hasSession) {
-      return {
-        success: false,
-        message:
-          "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
-      };
+      console.warn(
+        "Firebase anonymous session was not created. Continuing with app credentials.",
+      );
     }
     setStoredUserId(matchedUser.id);
     setCurrentUser(matchedUser);
@@ -497,11 +493,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (adminUser) {
         const hasSession = await ensureFirebaseSession();
         if (!hasSession) {
-          return {
-            success: false,
-            message:
-              "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
-          };
+          console.warn(
+            "Firebase anonymous session was not created. Continuing with app credentials.",
+          );
         }
         setStoredUserId("admin");
         setCurrentUser(adminUser);
@@ -560,11 +554,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const hasSession = await ensureFirebaseSession();
       if (!hasSession) {
-        return {
-          success: false,
-          message:
-            "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
-        };
+        console.warn(
+          "Firebase anonymous session was not created. Proceeding with member registration.",
+        );
       }
       await createMemberFromSignup(payload);
       const refreshedUsers = await getAllUsers();
