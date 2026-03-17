@@ -265,7 +265,7 @@ export default function SettingsPage() {
           className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
           style={dotPatternDark}
         />
-        <div className="mx-auto w-full max-w-5xl space-y-6 md:space-y-8">
+        <div className="mx-auto w-full space-y-6 md:space-y-8">
           <div className="pointer-events-none absolute left-10 top-8 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
           <div className="pointer-events-none absolute right-8 top-24 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
 
@@ -278,7 +278,7 @@ export default function SettingsPage() {
             </p>
           </header>
 
-          <Card className="modern-surface max-w-2xl mx-auto border-0 animate-soft-pop">
+          <Card className="modern-surface w-full border-0 animate-soft-pop">
             <CardHeader>
               <CardTitle>Update Your Credentials</CardTitle>
               <CardDescription>
@@ -341,7 +341,7 @@ export default function SettingsPage() {
 
           {isAdmin && (
             <>
-              <Card className="modern-surface max-w-2xl mx-auto border-0 animate-soft-pop">
+              <Card className="modern-surface w-full border-0 animate-soft-pop">
                 <CardHeader>
                   <CardTitle>Update Member Phone Number</CardTitle>
                   <CardDescription>
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="max-w-2xl mx-auto border border-destructive/60 bg-destructive/10 dark:bg-destructive/15 rounded-2xl shadow-md animate-soft-pop">
+              <Card className="w-full border border-destructive/60 bg-destructive/10 dark:bg-destructive/15 rounded-2xl shadow-md animate-soft-pop">
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <ShieldAlert className="h-6 w-6 text-destructive" />
