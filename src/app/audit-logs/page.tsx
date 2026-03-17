@@ -118,82 +118,86 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold font-headline">Audit Logs</h1>
-        <p className="text-muted-foreground">
-          Track privileged admin actions for security and operational
-          visibility.
-        </p>
-      </header>
+    <div className="p-4 md:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-7xl space-y-6">
+        <header>
+          <h1 className="text-2xl font-bold font-headline">Audit Logs</h1>
+          <p className="text-muted-foreground">
+            Track privileged admin actions for security and operational
+            visibility.
+          </p>
+        </header>
 
-      <Card>
-        <CardHeader className="gap-3">
-          <CardTitle>Activity Feed</CardTitle>
-          <CardDescription>
-            Showing latest admin actions, newest first.
-          </CardDescription>
-          <Input
-            value={filterText}
-            onChange={(event) => setFilterText(event.target.value)}
-            placeholder="Filter by action, actor, or metadata"
-          />
-        </CardHeader>
+        <Card className="w-full">
+          <CardHeader className="gap-3">
+            <CardTitle>Activity Feed</CardTitle>
+            <CardDescription>
+              Showing latest admin actions, newest first.
+            </CardDescription>
+            <Input
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+              placeholder="Filter by action, actor, or metadata"
+            />
+          </CardHeader>
 
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[190px]">Time</TableHead>
-                <TableHead className="w-[220px]">Action</TableHead>
-                <TableHead className="w-[100px]">Actor</TableHead>
-                <TableHead>Metadata</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>
-                      {format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss")}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{log.action}</Badge>
-                    </TableCell>
-                    <TableCell className="capitalize">{log.actorId}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {log.metadata ? (
-                        <pre className="whitespace-pre-wrap break-all max-h-24 overflow-auto">
-                          {JSON.stringify(log.metadata, null, 2)}
-                        </pre>
-                      ) : (
-                        "-"
-                      )}
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[190px]">Time</TableHead>
+                  <TableHead className="w-[220px]">Action</TableHead>
+                  <TableHead className="w-[100px]">Actor</TableHead>
+                  <TableHead>Metadata</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLogs.length > 0 ? (
+                  filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>
+                        {format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{log.action}</Badge>
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {log.actorId}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {log.metadata ? (
+                          <pre className="whitespace-pre-wrap break-all max-h-24 overflow-auto">
+                            {JSON.stringify(log.metadata, null, 2)}
+                          </pre>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-muted-foreground py-8"
+                    >
+                      No audit logs found for this filter.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No audit logs found for this filter.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
 
-        {hasMore && (
-          <CardFooter className="pt-6 justify-center">
-            <Button onClick={handleLoadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? "Loading..." : "Load More"}
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+          {hasMore && (
+            <CardFooter className="pt-6 justify-center">
+              <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? "Loading..." : "Load More"}
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
