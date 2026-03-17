@@ -28,7 +28,7 @@ import {
   clearActiveGroupId,
 } from "@/lib/firestore";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
 
 // --- Types ---
 interface AuthContextType {
@@ -146,6 +146,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const router = useRouter();
 
+  const ensureFirebaseSession = useCallback(async (): Promise<boolean> => {
+    if (auth.currentUser) {
+      return true;
+    }
+    try {
+      await signInAnonymously(auth);
+      return true;
+    } catch (error) {
+      console.error("Could not establish Firebase session:", error);
+      return false;
+    }
+  }, []);
+
   const refreshGroupDirectory = useCallback(async () => {
     try {
       const groups = await getGroupDirectory();
@@ -214,6 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const storedUserId = localStorage.getItem(LOCAL_USER_ID_KEY);
           if (storedUserId) {
+            await ensureFirebaseSession();
             const appUser = await getUser(storedUserId);
             if (appUser) {
               setCurrentUser(appUser);
@@ -247,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initialize();
-  }, [loadActiveGroupData, refreshGroupDirectory]);
+  }, [ensureFirebaseSession, loadActiveGroupData, refreshGroupDirectory]);
 
   const refreshAppSetup = async () => {
     await refreshGroupDirectory();
@@ -389,6 +403,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       clearLoginAttempts(getAttemptsKey("admin"));
+      const hasSession = await ensureFirebaseSession();
+      if (!hasSession) {
+        return {
+          success: false,
+          message:
+            "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
+        };
+      }
       localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
       setCurrentUser(matchedUser);
       setIsAdmin(true);
@@ -411,6 +433,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     clearLoginAttempts(getAttemptsKey("member", matchedUser.id));
+    const hasSession = await ensureFirebaseSession();
+    if (!hasSession) {
+      return {
+        success: false,
+        message:
+          "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
+      };
+    }
     localStorage.setItem(LOCAL_USER_ID_KEY, matchedUser.id);
     setCurrentUser(matchedUser);
     setIsAdmin(false);
@@ -440,6 +470,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (adminPassword && credential === adminPassword) {
       const adminUser = await getUser("admin");
       if (adminUser) {
+        const hasSession = await ensureFirebaseSession();
+        if (!hasSession) {
+          return {
+            success: false,
+            message:
+              "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
+          };
+        }
         localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
         setCurrentUser(adminUser);
         setIsAdmin(true);
@@ -500,6 +538,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const hasSession = await ensureFirebaseSession();
+      if (!hasSession) {
+        return {
+          success: false,
+          message:
+            "Firebase authentication session could not be created. Enable Anonymous sign-in in Firebase Authentication.",
+        };
+      }
       await createMemberFromSignup(payload);
       const refreshedUsers = await getAllUsers();
       setUsers(refreshedUsers);

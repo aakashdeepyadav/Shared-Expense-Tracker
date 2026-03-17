@@ -7,15 +7,16 @@ service cloud.firestore {
     }
 
     function groupAppConfigExists(groupId) {
+    function groupAppConfigExists(groupId) {
       return exists(/databases/$(database)/documents/groups/$(groupId)/config/app);
-    }
 
     // Setup is unauthenticated. Allow creating a group's initial docs only
-    // if that group's app config does not exist yet.
+    // Setup runs before Firebase auth. Allow creating initial group docs only
+    // while that group's app config does not exist yet.
     function canBootstrapGroupSetup(groupId) {
       return !groupAppConfigExists(groupId);
-    }
 
+    match /groups/{groupId} {
     match /groups/{groupId} {
       allow read: if true;
       allow create: if !exists(/databases/$(database)/documents/groups/$(groupId));
@@ -38,7 +39,7 @@ service cloud.firestore {
 
       match /users/{userId} {
         allow create: if canBootstrapGroupSetup(groupId);
-        allow read, create, update: if true;
+        allow read, update: if true;
         allow delete: if false;
       }
 
@@ -55,6 +56,12 @@ service cloud.firestore {
       }
 
       match /auditLogs/{entryId} {
+        allow read, write: if isSignedIn();
+      }
+
+      match /monthArchives/{archiveId} {
+        allow read, write: if isSignedIn();
+      }
         allow read, write: if isSignedIn();
       }
 
