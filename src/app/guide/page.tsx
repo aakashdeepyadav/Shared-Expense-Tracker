@@ -4,7 +4,13 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ShieldCheck, Users, ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  BookOpen,
+  ShieldCheck,
+  Users,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
 
 export default function GuidePage() {
   return (
@@ -42,15 +48,28 @@ export default function GuidePage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p className="font-medium">1. Login</p>
-              <p className="text-muted-foreground">Use your admin name and admin password.</p>
+              <p className="text-muted-foreground">
+                Use your admin name and admin password.
+              </p>
               <p className="font-medium">2. Daily Operations</p>
-              <p className="text-muted-foreground">Add expenses and contributions from dashboard actions.</p>
+              <p className="text-muted-foreground">
+                Add expenses and contributions from dashboard actions.
+              </p>
               <p className="font-medium">3. Settings</p>
-              <p className="text-muted-foreground">Update admin password, shared member PIN, and member phone details.</p>
+              <p className="text-muted-foreground">
+                Update admin password, shared member PIN, and member phone
+                details.
+              </p>
               <p className="font-medium">4. Reports</p>
-              <p className="text-muted-foreground">Generate reports to see spending, balances, who owes, and settlement suggestions.</p>
+              <p className="text-muted-foreground">
+                Generate reports to see spending, balances, who owes, and
+                settlement suggestions.
+              </p>
               <p className="font-medium">5. Start New Month</p>
-              <p className="text-muted-foreground">Use admin password to archive current month and reset live records.</p>
+              <p className="text-muted-foreground">
+                Use admin password to archive current month and reset live
+                records.
+              </p>
             </CardContent>
           </Card>
 
@@ -63,15 +82,26 @@ export default function GuidePage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p className="font-medium">1. Login</p>
-              <p className="text-muted-foreground">Select group, then enter your name and shared member PIN.</p>
+              <p className="text-muted-foreground">
+                Select group, then enter your name and shared member PIN.
+              </p>
               <p className="font-medium">2. Dashboard</p>
-              <p className="text-muted-foreground">View your contribution, expense share, and latest activity.</p>
+              <p className="text-muted-foreground">
+                View your contribution, expense share, and latest activity.
+              </p>
               <p className="font-medium">3. History</p>
-              <p className="text-muted-foreground">Check expense and contribution history for current and archived months.</p>
+              <p className="text-muted-foreground">
+                Check expense and contribution history for current and archived
+                months.
+              </p>
               <p className="font-medium">4. Chat</p>
-              <p className="text-muted-foreground">Send group updates and review unread messages.</p>
+              <p className="text-muted-foreground">
+                Send group updates and review unread messages.
+              </p>
               <p className="font-medium">5. Profile</p>
-              <p className="text-muted-foreground">Update your own display name and phone number in Settings.</p>
+              <p className="text-muted-foreground">
+                Update your own display name and phone number in Settings.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -81,9 +111,18 @@ export default function GuidePage() {
             <CardTitle>Quick Notes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>- Group ID must be entered before login if no active group is selected.</p>
-            <p>- If login fails repeatedly, wait for lockout timer to finish and try again.</p>
-            <p>- If Start New Month fails, ensure latest Firestore rules are deployed.</p>
+            <p>
+              - Group ID must be entered before login if no active group is
+              selected.
+            </p>
+            <p>
+              - If login fails repeatedly, wait for lockout timer to finish and
+              try again.
+            </p>
+            <p>
+              - If Start New Month fails, ensure latest Firestore rules are
+              deployed.
+            </p>
           </CardContent>
         </Card>
 
