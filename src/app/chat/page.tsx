@@ -90,9 +90,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader />
-      <main className="flex-1 flex flex-col p-2 md:p-6 pb-2 md:pb-6">
+      <main className="flex-1 min-h-0 flex flex-col p-2 md:p-6 pb-2 md:pb-6">
         <div className="modern-surface animate-fade-up flex-1 flex flex-col w-full mx-auto border-0 p-3 md:p-5">
           <div className="flex-1 overflow-y-auto space-y-4 md:space-y-6 pr-1 md:pr-2">
             {messages.map((msg) => {

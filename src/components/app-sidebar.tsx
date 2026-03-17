@@ -74,9 +74,6 @@ export function AppSidebar() {
               {appLabel}
             </h1>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-            Change group from Login by typing group ID.
-          </p>
         </div>
       </SidebarHeader>
       <SidebarContent className="p-3 md:p-4">
