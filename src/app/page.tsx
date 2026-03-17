@@ -273,7 +273,7 @@ export default function DashboardPage() {
             users={users}
           />
           <div className="grid gap-6">
-            <Card className="modern-surface border-0">
+            <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
               <CardHeader className="pb-3">
                 <CardTitle className="text-xl tracking-tight">
                   Member Contributions
@@ -292,7 +292,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
             <div className="grid gap-6 md:grid-cols-2">
-              <Card className="modern-surface border-0">
+              <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
                 <CardHeader className="pb-3">
                   <CardTitle className="tracking-tight">
                     Recent Expenses
@@ -305,7 +305,7 @@ export default function DashboardPage() {
                   <RecentExpenses expenses={visibleExpenses} users={users} />
                 </CardContent>
               </Card>
-              <Card className="modern-surface border-0">
+              <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
                 <CardHeader className="pb-3">
                   <CardTitle className="tracking-tight">
                     Recent Contributions

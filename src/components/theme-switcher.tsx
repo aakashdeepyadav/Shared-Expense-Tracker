@@ -32,19 +32,21 @@ export function ThemeSwitcher() {
         className={cn(
           "h-[1.05rem] w-[1.05rem] transition-all duration-300",
           isDark
-            ? "rotate-90 scale-0 opacity-0"
-            : "rotate-0 scale-100 opacity-100",
+            ? "rotate-0 scale-100 opacity-100"
+            : "rotate-90 scale-0 opacity-0",
         )}
       />
       <Moon
         className={cn(
           "absolute h-[1.05rem] w-[1.05rem] transition-all duration-300",
           isDark
-            ? "rotate-0 scale-100 opacity-100"
-            : "-rotate-90 scale-0 opacity-0",
+            ? "-rotate-90 scale-0 opacity-0"
+            : "rotate-0 scale-100 opacity-100",
         )}
       />
-      <span className="sr-only">Toggle theme</span>
+      <span className="sr-only">
+        {isDark ? "Switch to light mode" : "Switch to dark mode"}
+      </span>
     </Button>
   );
 }

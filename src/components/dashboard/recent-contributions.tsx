@@ -23,7 +23,7 @@ export function RecentContributions({
   const userMap = new Map(users.map((user) => [user.id, user]));
 
   return (
-    <div className="w-full min-w-0">
+    <div className="mx-auto w-full min-w-0 max-w-[25rem] md:max-w-none">
       <div className="space-y-3 md:hidden">
         {contributions.length > 0 ? (
           contributions.slice(0, 5).map((contribution) => {

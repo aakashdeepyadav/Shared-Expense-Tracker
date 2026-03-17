@@ -29,7 +29,7 @@ export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
   });
 
   return (
-    <div className="w-full min-w-0">
+    <div className="mx-auto w-full min-w-0 max-w-[25rem] md:max-w-none">
       <div className="space-y-3 md:hidden">
         {expenses.length > 0 ? (
           expenses.slice(0, 5).map((expense) => {

@@ -70,12 +70,12 @@ export function ContributionChart({
   return (
     <ChartContainer
       config={chartConfig}
-      className="min-h-[220px] w-full min-w-0 overflow-hidden"
+      className="mx-auto min-h-[210px] w-full min-w-0 max-w-[25rem] overflow-hidden sm:min-h-[220px] md:max-w-none"
     >
       <BarChart
         accessibilityLayer
         data={contributionData}
-        margin={{ top: 12, right: 8, bottom: 8, left: 0 }}
+        margin={{ top: 12, right: 4, bottom: 8, left: 0 }}
       >
         <CartesianGrid vertical={false} strokeDasharray="3 4" opacity={0.35} />
         <XAxis
@@ -103,7 +103,7 @@ export function ContributionChart({
             />
           }
         />
-        <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={48}>
+        <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={42}>
           {contributionData.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.fill} />
           ))}
