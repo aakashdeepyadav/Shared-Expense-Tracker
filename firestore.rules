@@ -39,7 +39,7 @@ service cloud.firestore {
       match /config/app {
         allow create: if canBootstrapGroupSetup(groupId)
           && request.resource.data.initialized == true;
-        allow read: if isSignedIn();
+        allow read: if true;
         allow update: if canAccessInitializedGroup(groupId);
         allow delete: if false;
       }
