@@ -289,13 +289,7 @@ export async function isGroupIdAvailable(groupId: string): Promise<boolean> {
 
   const rootRef = groupRootDoc(sanitized);
   const rootSnapshot = await getDoc(rootRef);
-  if (rootSnapshot.exists()) {
-    return false;
-  }
-
-  const appConfigRef = groupConfigDoc(sanitized, 'app');
-  const appConfigSnapshot = await getDoc(appConfigRef);
-  return !appConfigSnapshot.exists();
+  return !rootSnapshot.exists();
 }
 
 export async function initializeTrackerInstance(payload: TrackerSetupPayload): Promise<string> {

@@ -106,7 +106,9 @@ export default function SetupPage() {
 
   const canContinue = useMemo(() => {
     if (currentStep === "group")
-      return GROUP_ID_REGEX.test(groupName) && isGroupIdAvailableState === true;
+      return (
+        GROUP_ID_REGEX.test(groupName) && isGroupIdAvailableState !== false
+      );
     if (currentStep === "members") return memberCount >= 2;
     if (currentStep === "memberDetails")
       return members.every((m) => m.name.trim().length > 0);
@@ -476,7 +478,9 @@ export default function SetupPage() {
                           : isGroupIdAvailableState === false &&
                               GROUP_ID_REGEX.test(groupName)
                             ? "Group ID already exists. Choose another one."
-                            : ""}
+                            : GROUP_ID_REGEX.test(groupName)
+                              ? "Could not verify right now. You can continue; final check happens on create."
+                              : ""}
                     </p>
                   </div>
                   <div className="space-y-2">
