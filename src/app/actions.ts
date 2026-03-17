@@ -12,7 +12,7 @@ import {
 } from "@/ai/flows/generate-report";
 import { z } from "zod";
 import {
-  getAdminPassword,
+  verifyAdminPassword,
   getAppConfig,
   updateUserPhoneNumber,
   addExpense,
@@ -242,8 +242,8 @@ export async function startNewMonthAction(
   }
 
   try {
-    const currentAdminPassword = await getAdminPassword();
-    if (!currentAdminPassword || currentAdminPassword !== adminPassword) {
+    const isValidAdminPassword = await verifyAdminPassword(adminPassword);
+    if (!isValidAdminPassword) {
       return { success: false, error: "Invalid admin password." };
     }
 

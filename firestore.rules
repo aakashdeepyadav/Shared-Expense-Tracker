@@ -2,65 +2,104 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidGroupId(groupId) {
+      return groupId.matches('^[a-z0-9-]{3,30}$');
+    }
+
     function groupAppConfigExists(groupId) {
       return exists(/databases/$(database)/documents/groups/$(groupId)/config/app);
     }
 
-    // Setup runs before Firebase auth; allow initial create only once.
     function canBootstrapGroupSetup(groupId) {
-      return !groupAppConfigExists(groupId);
+      return isValidGroupId(groupId) && !groupAppConfigExists(groupId);
     }
 
-    // App uses local role/password/PIN login, so group writes are allowed
-    // after setup has initialized the group config.
     function canAccessInitializedGroup(groupId) {
-      return groupAppConfigExists(groupId);
+      return isValidGroupId(groupId) && groupAppConfigExists(groupId) && isSignedIn();
+    }
+
+    function validPhoneOrNull(phone) {
+      return phone == null || phone.matches('^\\+91[6-9][0-9]{9}$');
+    }
+
+    function validCredentialString(value, minLen) {
+      return value is string && value.size() >= minLen && value.size() <= 128;
     }
 
     match /groups/{groupId} {
       allow read: if true;
-      allow create: if !exists(/databases/$(database)/documents/groups/$(groupId));
+      allow create: if canBootstrapGroupSetup(groupId);
       allow update: if canAccessInitializedGroup(groupId);
       allow delete: if false;
 
       match /config/app {
-        allow create: if canBootstrapGroupSetup(groupId);
-        allow read: if true;
+        allow create: if canBootstrapGroupSetup(groupId)
+          && request.resource.data.initialized == true;
+        allow read: if isSignedIn();
         allow update: if canAccessInitializedGroup(groupId);
         allow delete: if false;
       }
 
       match /config/admin {
-        allow create: if canBootstrapGroupSetup(groupId);
-        allow read: if true;
+        allow create: if canBootstrapGroupSetup(groupId)
+          && validCredentialString(request.resource.data.password, 8)
+          && validCredentialString(request.resource.data.pin, 6);
+        allow read: if isSignedIn();
         allow update: if canAccessInitializedGroup(groupId);
         allow delete: if false;
       }
 
       match /users/{userId} {
         allow create: if canBootstrapGroupSetup(groupId) || canAccessInitializedGroup(groupId);
-        allow read, update: if true;
+        allow read: if isSignedIn();
+        allow update: if canAccessInitializedGroup(groupId);
         allow delete: if false;
       }
 
       match /expenses/{expenseId} {
-        allow read, write: if canAccessInitializedGroup(groupId);
+        allow read: if isSignedIn();
+        allow create, update: if canAccessInitializedGroup(groupId)
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 10000000;
+        allow delete: if false;
       }
 
       match /contributions/{contributionId} {
-        allow read, write: if canAccessInitializedGroup(groupId);
+        allow read: if isSignedIn();
+        allow create, update: if canAccessInitializedGroup(groupId)
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 10000000;
+        allow delete: if false;
       }
 
       match /messages/{messageId} {
-        allow read, write: if canAccessInitializedGroup(groupId);
+        allow read: if isSignedIn();
+        allow create, update: if canAccessInitializedGroup(groupId)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000;
+        allow delete: if false;
       }
 
       match /auditLogs/{entryId} {
-        allow read, write: if canAccessInitializedGroup(groupId);
+        allow read: if isSignedIn();
+        allow create, update: if canAccessInitializedGroup(groupId)
+          && request.resource.data.action is string
+          && request.resource.data.action.size() > 0
+          && request.resource.data.action.size() <= 120;
+        allow delete: if false;
       }
 
       match /monthArchives/{archiveId} {
-        allow read, write: if canAccessInitializedGroup(groupId);
+        allow read: if isSignedIn();
+        allow create, update: if canAccessInitializedGroup(groupId);
+        allow delete: if false;
       }
     }
 

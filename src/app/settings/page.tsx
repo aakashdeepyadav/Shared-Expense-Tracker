@@ -18,11 +18,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, ShieldAlert } from "lucide-react";
 import {
   addAdminAuditLog,
-  getAdminPassword,
   rolloverMonthWithArchive,
   updateSharedMemberPin,
   updateUserProfile,
   updateUserPhoneNumber,
+  verifyAdminPassword,
 } from "@/lib/firestore";
 import {
   AlertDialog,
@@ -298,8 +298,9 @@ export default function SettingsPage() {
 
     setIsStartingNewMonth(true);
     try {
-      const currentPassword = await getAdminPassword();
-      if (!currentPassword || currentPassword !== monthResetPassword) {
+      const isValidAdminPassword =
+        await verifyAdminPassword(monthResetPassword);
+      if (!isValidAdminPassword) {
         throw new Error("Invalid admin password.");
       }
 

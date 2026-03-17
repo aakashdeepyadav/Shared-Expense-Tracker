@@ -69,6 +69,49 @@ function normalizeIndianPhoneNumber(phoneNumber?: string): string | undefined {
   return undefined;
 }
 
+function isHashedCredential(value: string): boolean {
+  return value.startsWith('sha256:');
+}
+
+async function hashCredential(rawValue: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(rawValue);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const bytes = Array.from(new Uint8Array(digest));
+  const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `sha256:${hex}`;
+}
+
+async function normalizeCredentialForStorage(rawValue: string): Promise<string> {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (isHashedCredential(trimmed)) {
+    return trimmed;
+  }
+  return hashCredential(trimmed);
+}
+
+export async function verifyStoredCredential(
+  storedCredential: string | null | undefined,
+  candidate: string,
+): Promise<boolean> {
+  const normalizedStored = (storedCredential || '').trim();
+  const normalizedCandidate = candidate.trim();
+  if (!normalizedStored || !normalizedCandidate) {
+    return false;
+  }
+
+  if (isHashedCredential(normalizedStored)) {
+    const candidateHash = await hashCredential(normalizedCandidate);
+    return candidateHash === normalizedStored;
+  }
+
+  // Backward compatibility with legacy plain-text credentials.
+  return normalizedStored === normalizedCandidate;
+}
+
 function generateGroupId(groupName: string): string {
   const slug = groupName
     .toLowerCase()
@@ -294,6 +337,8 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     throw new Error('Admin password must be at least 8 characters.');
   }
 
+  const hashedAdminPassword = await normalizeCredentialForStorage(payload.adminPassword);
+
   const groupId = requestedGroupId;
 
   const rootRef = groupRootDoc(groupId);
@@ -313,6 +358,10 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
   const batch = writeBatch(db);
   const usedIds = new Set<string>();
 
+  const memberPins = await Promise.all(
+    normalizedMembers.map(async (member) => normalizeCredentialForStorage(member.pin)),
+  );
+
   normalizedMembers.forEach((member, index) => {
     const baseId = sanitizeMemberId(member.name);
     let nextId = baseId;
@@ -331,7 +380,7 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
     batch.set(userDocRef, {
       name: member.name,
       avatarUrl: member.avatarUrl,
-      pin: member.pin,
+      pin: memberPins[index],
       phoneNumber: member.phoneNumber || null,
       memberType: member.memberType || payload.memberTypeLabel || 'member',
     });
@@ -339,8 +388,8 @@ export async function initializeTrackerInstance(payload: TrackerSetupPayload): P
 
   const adminMember = normalizedMembers[payload.adminIndex];
   batch.set(adminConfigRef, {
-    password: payload.adminPassword,
-    pin: adminMember.pin,
+    password: hashedAdminPassword,
+    pin: memberPins[payload.adminIndex],
     name: adminMember.name,
     avatarUrl: adminMember.avatarUrl,
     phoneNumber: adminMember.phoneNumber || null,
@@ -413,10 +462,12 @@ export async function createMemberFromSignup(input: MemberSignupInput): Promise<
     suffix += 1;
   }
 
+  const hashedPin = await normalizeCredentialForStorage(input.pin);
+
   const userRecord: Omit<User, 'id'> = {
     name,
     avatarUrl: input.avatarUrl || DEFAULT_AVATAR,
-    pin: input.pin.trim(),
+    pin: hashedPin,
     phoneNumber: normalizeIndianPhoneNumber(input.phoneNumber),
     memberType: input.memberType || 'member',
   };
@@ -554,10 +605,11 @@ export async function getUser(id: string): Promise<User | null> {
 
 export async function updateUserCredential(userId: string, newCredential: string, isAdmin: boolean): Promise<void> {
   const resolvedGroupId = resolveGroupId();
+  const storedCredential = await normalizeCredentialForStorage(newCredential);
   if (isAdmin) {
     const configDocRef = groupConfigDoc(resolvedGroupId, 'admin');
     try {
-      await updateDoc(configDocRef, { password: newCredential });
+      await updateDoc(configDocRef, { password: storedCredential });
     } catch (error) {
       const permissionError = new FirestorePermissionError({
         path: configDocRef.path,
@@ -570,7 +622,7 @@ export async function updateUserCredential(userId: string, newCredential: string
   } else {
     const userDocRef = doc(db, 'groups', resolvedGroupId, 'users', userId);
     try {
-      await updateDoc(userDocRef, { pin: newCredential });
+      await updateDoc(userDocRef, { pin: storedCredential });
     } catch (error) {
       const permissionError = new FirestorePermissionError({
         path: userDocRef.path,
@@ -672,16 +724,18 @@ export async function updateSharedMemberPin(newPin: string): Promise<void> {
     throw new Error('Shared member PIN must be exactly 6 digits.');
   }
 
+  const hashedPin = await normalizeCredentialForStorage(sanitizedPin);
+
   const usersCol = groupCollection(resolvedGroupId, 'users');
   const usersSnapshot = await getDocs(usersCol);
   const batch = writeBatch(db);
 
   usersSnapshot.docs.forEach((userDoc) => {
-    batch.update(userDoc.ref, { pin: sanitizedPin });
+    batch.update(userDoc.ref, { pin: hashedPin });
   });
 
   const adminConfigRef = groupConfigDoc(resolvedGroupId, 'admin');
-  batch.update(adminConfigRef, { pin: sanitizedPin });
+  batch.update(adminConfigRef, { pin: hashedPin });
 
   try {
     await batch.commit();
@@ -714,6 +768,11 @@ export async function getAdminPassword(): Promise<string | null> {
     errorEmitter.emit('permission-error', permissionError);
     throw error;
   }
+}
+
+export async function verifyAdminPassword(candidatePassword: string): Promise<boolean> {
+  const stored = await getAdminPassword();
+  return verifyStoredCredential(stored, candidatePassword);
 }
 
 // --- Expense Functions ---

@@ -16,7 +16,8 @@ import type {
 import { useRouter } from "next/navigation";
 import {
   getUser,
-  getAdminPassword,
+  verifyAdminPassword,
+  verifyStoredCredential,
   updateUserCredential as updateUserCredentialInDb,
   getAppConfig,
   getAllUsers,
@@ -96,7 +97,8 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 // --- Constants ---
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 5;
+const BASE_LOCKOUT_MINUTES = 5;
+const MAX_LOCKOUT_MINUTES = 60;
 const LOCAL_USER_ID_KEY = "shared-expense-tracker-userid";
 
 const getStoredUserId = () => {
@@ -125,8 +127,14 @@ const clearStoredUserId = () => {
 };
 
 // --- Helper functions (lockout logic) ---
-const getAttemptsKey = (role: "admin" | "member", userId?: string) =>
-  role === "admin" ? "login-attempts-admin" : `login-attempts-${userId}`;
+const getAttemptScope = () => getActiveGroupId() || "global";
+
+const getAttemptsKey = (role: "admin" | "member", userId?: string) => {
+  const scope = getAttemptScope();
+  return role === "admin"
+    ? `login-attempts-${scope}-admin`
+    : `login-attempts-${scope}-${userId}`;
+};
 
 const getLoginAttempts = (key: string) => {
   try {
@@ -135,6 +143,20 @@ const getLoginAttempts = (key: string) => {
   } catch {
     return { count: 0, timestamp: 0 };
   }
+};
+
+const getLockoutDurationMs = (attemptCount: number) => {
+  if (attemptCount < MAX_ATTEMPTS) {
+    return 0;
+  }
+
+  const tier = Math.floor((attemptCount - MAX_ATTEMPTS) / MAX_ATTEMPTS);
+  const lockoutMinutes = Math.min(
+    BASE_LOCKOUT_MINUTES * Math.pow(2, tier),
+    MAX_LOCKOUT_MINUTES,
+  );
+
+  return lockoutMinutes * 60 * 1000;
 };
 
 const setLoginAttempts = (key: string, count: number, timestamp: number) => {
@@ -207,6 +229,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (!auth.currentUser) {
+      await ensureFirebaseSession();
+    }
+
     const loadedConfig = await getAppConfig(resolvedGroupId);
     setAppConfig(loadedConfig);
     setIsAppConfigured(!!loadedConfig?.initialized);
@@ -236,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthLoading(true);
       setIsDataLoading(true);
       try {
+        await ensureFirebaseSession();
         await refreshGroupDirectory();
         await loadActiveGroupData();
       } catch (error) {
@@ -321,6 +348,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(null);
       setIsAdmin(false);
 
+      await ensureFirebaseSession();
+
       const selectedConfig = await selectGroupById(nextGroupId);
       const canonicalGroupId = selectedConfig.groupId || nextGroupId;
       setActiveGroupId(canonicalGroupId);
@@ -344,9 +373,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return 0;
     const key = getAttemptsKey(role, userId);
     const attempts = getLoginAttempts(key);
-    if (attempts.count < MAX_ATTEMPTS) return 0;
+    const lockoutDurationMs = getLockoutDurationMs(attempts.count);
+    if (lockoutDurationMs <= 0) return 0;
 
-    const lockoutEnd = attempts.timestamp + LOCKOUT_MINUTES * 60 * 1000;
+    const lockoutEnd = attempts.timestamp + lockoutDurationMs;
     if (Date.now() > lockoutEnd) {
       clearLoginAttempts(key);
       return 0;
@@ -359,16 +389,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let attempts = getLoginAttempts(key);
     const now = Date.now();
 
-    if (now > attempts.timestamp + LOCKOUT_MINUTES * 60 * 1000) {
+    if (attempts.timestamp && now > attempts.timestamp + 24 * 60 * 60 * 1000) {
       attempts = { count: 0, timestamp: 0 };
     }
 
     const count = attempts.count + 1;
-    const timestamp = attempts.count === 0 ? now : attempts.timestamp;
+    const timestamp = now;
     setLoginAttempts(key, count, timestamp);
 
-    if (count >= MAX_ATTEMPTS) {
-      return { lockedUntil: timestamp + LOCKOUT_MINUTES * 60 * 1000 };
+    const lockoutDurationMs = getLockoutDurationMs(count);
+    if (lockoutDurationMs > 0) {
+      return { lockedUntil: timestamp + lockoutDurationMs };
     }
     return {};
   };
@@ -417,8 +448,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, lockedUntil: adminLockoutEnd };
       }
 
-      const adminPassword = await getAdminPassword();
-      if (!adminPassword || adminPassword !== typedPassword) {
+      const isValidAdminPassword = await verifyAdminPassword(typedPassword);
+      if (!isValidAdminPassword) {
         const failure = recordFailedAttempt("admin");
         return {
           success: false,
@@ -446,7 +477,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, lockedUntil: memberLockoutEnd };
     }
 
-    if (matchedUser.pin !== typedPassword) {
+    const isValidMemberPin = await verifyStoredCredential(
+      matchedUser.pin,
+      typedPassword,
+    );
+    if (!isValidMemberPin) {
       const failure = recordFailedAttempt("member", matchedUser.id);
       return {
         success: false,
@@ -487,8 +522,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (Date.now() < lockoutEnd)
       return { success: false, lockedUntil: lockoutEnd };
 
-    const adminPassword = await getAdminPassword();
-    if (adminPassword && credential === adminPassword) {
+    const isValidAdminPassword = await verifyAdminPassword(credential || "");
+    if (isValidAdminPassword) {
       const adminUser = await getUser("admin");
       if (adminUser) {
         const hasSession = await ensureFirebaseSession();
