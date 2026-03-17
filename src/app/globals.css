@@ -100,11 +100,11 @@ body {
 
 @layer components {
   .modern-surface {
-    @apply rounded-2xl !border border-slate-200/75 !bg-white/88 !shadow-md shadow-slate-900/10;
+    @apply rounded-2xl border border-slate-200/80 bg-white/90 shadow-md;
   }
 
   .dark .modern-surface {
-    @apply border-slate-800/85 !bg-slate-900/88 shadow-black/35;
+    @apply border-slate-800/80 bg-slate-900/90 shadow-md;
   }
 
   .modern-panel {
