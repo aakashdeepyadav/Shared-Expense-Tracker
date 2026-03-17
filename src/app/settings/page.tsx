@@ -89,6 +89,14 @@ export default function SettingsPage() {
   const minCredentialLength = isAdmin ? 8 : 6;
   const credentialHint = isAdmin ? "at least 8 characters" : "exactly 6 digits";
   const inputType = isAdmin ? "password" : "text";
+  const dotPatternLight = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E\")",
+  };
+  const dotPatternDark = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23475569'/%3E%3C/svg%3E\")",
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,10 +256,18 @@ export default function SettingsPage() {
   return (
     <div className="flex h-screen flex-col">
       <PageHeader />
-      <main className="relative flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+      <main className="relative flex-1 overflow-y-auto bg-slate-50 p-4 pb-20 dark:bg-slate-950 md:p-6 md:pb-6 lg:p-8">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+          style={dotPatternLight}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+          style={dotPatternDark}
+        />
         <div className="mx-auto w-full max-w-5xl space-y-6 md:space-y-8">
-          <div className="pointer-events-none absolute -left-14 top-6 h-64 w-64 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-500/10" />
-          <div className="pointer-events-none absolute right-0 top-32 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-500/10" />
+          <div className="pointer-events-none absolute left-10 top-8 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+          <div className="pointer-events-none absolute right-8 top-24 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
 
           <header className="mb-4 animate-fade-up">
             <h1 className="text-2xl font-bold tracking-tight font-headline md:text-3xl lg:text-4xl">

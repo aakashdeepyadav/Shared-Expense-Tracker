@@ -19,14 +19,11 @@ import { AlertCircle, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 
-type LoginStep = "credentials" | "otp";
-
 export default function LoginPage() {
   const router = useRouter();
   const [groupIdInput, setGroupIdInput] = useState("");
   const [loginName, setLoginName] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
   const { toast } = useToast();
   const {
     loginWithCredentials,
@@ -34,7 +31,7 @@ export default function LoginPage() {
     isAuthLoading,
     isAppConfigured,
     appConfig,
-    verifyOtp,
+    users,
     activeGroupId,
     selectGroup,
     clearSelectedGroup,
@@ -43,7 +40,6 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
 
   useEffect(() => {
     if (!isAuthLoading && currentUser) {
@@ -57,28 +53,13 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
-    if (loginStep === "credentials") {
-      const result = await loginWithCredentials({
-        name: loginName,
-        password,
-      });
+    const result = await loginWithCredentials({
+      name: loginName,
+      password,
+    });
 
-      if (result.success) {
-        if (result.requiresOtp) {
-          setLoginStep("otp");
-          toast({
-            title: "OTP Sent",
-            description: "OTP sent to admin mobile number.",
-          });
-        }
-      } else {
-        handleLoginFailure(result);
-      }
-    } else {
-      const result = await verifyOtp(otp);
-      if (!result.success) {
-        handleLoginFailure(result);
-      }
+    if (!result.success) {
+      handleLoginFailure(result);
     }
     setIsLoggingIn(false);
   };
@@ -100,7 +81,6 @@ export default function LoginPage() {
     }
     if (!result.lockedUntil) {
       setPassword("");
-      setOtp("");
     }
   };
 
@@ -127,29 +107,30 @@ export default function LoginPage() {
   };
 
   const resetLoginFlow = () => {
-    setLoginStep("credentials");
     setPassword("");
-    setOtp("");
   };
 
   const getButtonText = () => {
-    if (isLoggingIn) {
-      switch (loginStep) {
-        case "credentials":
-          return "Signing In...";
-        case "otp":
-          return "Verifying OTP...";
-      }
-    }
-    switch (loginStep) {
-      case "credentials":
-        return "Sign In";
-      case "otp":
-        return "Verify OTP & Sign In";
-      default:
-        return "Sign In";
-    }
+    return isLoggingIn ? "Signing In..." : "Sign In";
   };
+
+  const dotPatternLight = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E\")",
+  };
+  const dotPatternDark = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23475569'/%3E%3C/svg%3E\")",
+  };
+
+  const matchedUser = users.find(
+    (user) => user.name.toLowerCase() === loginName.trim().toLowerCase(),
+  );
+  const isAdminName = matchedUser?.id === "admin";
+  const credentialLabel = isAdminName ? "Admin Password" : "PIN";
+  const credentialPlaceholder = isAdminName
+    ? "Type admin password"
+    : "Type your 6-digit PIN";
 
   if (isAuthLoading) {
     return (
@@ -165,10 +146,18 @@ export default function LoginPage() {
 
   if (!isAppConfigured) {
     return (
-      <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden p-4">
-        <div className="pointer-events-none absolute -left-16 top-10 h-60 w-60 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/20" />
-        <div className="pointer-events-none absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl dark:bg-amber-500/20" />
-        <Card className="modern-surface w-full max-w-md border-0 shadow-xl">
+      <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+          style={dotPatternLight}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+          style={dotPatternDark}
+        />
+        <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+        <div className="pointer-events-none absolute right-12 bottom-12 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
+        <Card className="modern-surface w-full max-w-md border-0">
           <CardHeader className="items-center text-center">
             <Logo className="mb-4 h-16 w-16" />
             <CardTitle>Welcome to Shared Expense Tracker</CardTitle>
@@ -215,11 +204,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden p-4">
-      <div className="pointer-events-none absolute -left-16 top-10 h-60 w-60 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/20" />
-      <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-emerald-300/25 blur-3xl dark:bg-emerald-500/20" />
-      <div className="pointer-events-none absolute -right-14 bottom-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl dark:bg-amber-500/20" />
-      <Card className="modern-surface w-full max-w-md border-0 shadow-xl">
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-slate-50 p-4 dark:bg-slate-950">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+        style={dotPatternLight}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+        style={dotPatternDark}
+      />
+      <div className="pointer-events-none absolute left-10 top-10 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+      <div className="pointer-events-none absolute right-16 top-12 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
+      <div className="pointer-events-none absolute bottom-12 right-14 h-20 w-20 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
+      <Card className="modern-surface w-full max-w-md border-0">
         <CardHeader className="items-center text-center">
           <Logo className="mb-4 h-16 w-16" />
           <CardTitle className="text-2xl tracking-tight">
@@ -263,71 +260,37 @@ export default function LoginPage() {
             </Alert>
           )}
           <div className="space-y-6">
-            {loginStep === "credentials" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-name-input">Name</Label>
-                  <Input
-                    id="login-name-input"
-                    value={loginName}
-                    onChange={(e) => setLoginName(e.target.value)}
-                    placeholder="Type your name"
-                    disabled={isLoggingIn || isLocked}
-                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-input">Password</Label>
-                  <Input
-                    id="password-input"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Type your password"
-                    disabled={isLoggingIn || isLocked}
-                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-name-input">Name</Label>
+                <Input
+                  id="login-name-input"
+                  value={loginName}
+                  onChange={(e) => setLoginName(e.target.value)}
+                  placeholder="Type your name"
+                  disabled={isLoggingIn || isLocked}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                />
               </div>
-            )}
-
-            {loginStep === "otp" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="otp-input">Enter OTP</Label>
-                  <Input
-                    id="otp-input"
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="Enter 6-digit OTP"
-                    maxLength={6}
-                    disabled={isLoggingIn}
-                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={resetLoginFlow}
-                  className="p-0 h-auto"
-                >
-                  Back to login
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="password-input">{credentialLabel}</Label>
+                <Input
+                  id="password-input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={credentialPlaceholder}
+                  disabled={isLoggingIn || isLocked}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                />
               </div>
-            )}
-
-            <div id="recaptcha-container"></div>
+            </div>
 
             <Button
               onClick={handleLogin}
               className="w-full"
               disabled={
-                isLoggingIn ||
-                isLocked ||
-                (loginStep === "credentials" &&
-                  (!loginName.trim() || !password.trim())) ||
-                (loginStep === "otp" && !otp.trim())
+                isLoggingIn || isLocked || !loginName.trim() || !password.trim()
               }
             >
               {getButtonText()}

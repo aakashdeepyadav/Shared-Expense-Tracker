@@ -13,12 +13,11 @@ import type {
   MemberSignupInput,
   GroupDirectoryEntry,
 } from "@/lib/types";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   getUser,
   getAdminPassword,
   updateUserCredential as updateUserCredentialInDb,
-  updateUserPhoneNumber,
   getAppConfig,
   getAllUsers,
   createMemberFromSignup,
@@ -29,13 +28,7 @@ import {
   clearActiveGroupId,
 } from "@/lib/firestore";
 import { auth } from "@/lib/firebase";
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  onAuthStateChanged,
-  signOut,
-  ConfirmationResult,
-} from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 
 // --- Types ---
 interface AuthContextType {
@@ -53,7 +46,6 @@ interface AuthContextType {
     password: string;
   }) => Promise<{
     success: boolean;
-    requiresOtp?: boolean;
     lockedUntil?: number;
     message?: string;
   }>;
@@ -61,20 +53,6 @@ interface AuthContextType {
     role: "admin",
     credential?: string,
   ) => Promise<{ success: boolean; lockedUntil?: number; message?: string }>;
-  verifyPin: (
-    userId: string,
-    pin: string,
-  ) => Promise<{
-    success: boolean;
-    needsPhoneNumber?: boolean;
-    lockedUntil?: number;
-    message?: string;
-  }>;
-  savePhoneNumberAndSendOtp: (
-    userId: string,
-    phoneNumber: string,
-  ) => Promise<{ success: boolean; message?: string }>;
-  verifyOtp: (otp: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   updateUserCredential: (newCredential: string) => Promise<boolean>;
   registerMember: (
@@ -166,92 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  // State for OTP flow
-  const [confirmationResult, setConfirmationResult] =
-    useState<ConfirmationResult | null>(null);
-  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
-
   const router = useRouter();
-  const pathname = usePathname();
-
-  // --- Setup reCAPTCHA ---
-  const setupRecaptcha = useCallback(() => {
-    // Only run on client
-    if (typeof window === "undefined") return null;
-
-    // Clear previous verifier if it exists
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-    }
-
-    try {
-      // Ensure the container is in the DOM before creating the verifier
-      const container = document.getElementById("recaptcha-container");
-      if (container) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, container, {
-          size: "invisible",
-          callback: () => {
-            // reCAPTCHA solved, allow sign-in
-          },
-          "expired-callback": () => {
-            // Response expired. Ask user to solve reCAPTCHA again.
-            console.warn("Recaptcha expired. Please try again.");
-            if (pathname === "/login") {
-              setupRecaptcha(); // Re-initialize only on login page
-            }
-          },
-        });
-        return window.recaptchaVerifier;
-      }
-    } catch (error) {
-      console.error("Recaptcha setup failed", error);
-    }
-    return null;
-  }, [pathname]);
-
-  // --- OTP Sender ---
-  const sendOtp = async (phoneNumber: string) => {
-    let verifier: RecaptchaVerifier | null | undefined =
-      window.recaptchaVerifier;
-    if (!verifier) {
-      console.log("Recaptcha verifier not initialized, setting up now.");
-      verifier = setupRecaptcha();
-    }
-
-    if (!verifier) {
-      return {
-        success: false,
-        message: "Recaptcha not ready. Please wait a moment and try again.",
-      };
-    }
-
-    try {
-      const result = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-      setConfirmationResult(result);
-      return { success: true };
-    } catch (err: unknown) {
-      console.error("OTP send error:", err);
-      const errCode = getErrorCode(err);
-      // This error is common if the domain is not whitelisted in Firebase console
-      if (
-        errCode === "auth/captcha-check-failed" ||
-        errCode === "auth/invalid-app-credential"
-      ) {
-        return {
-          success: false,
-          message: `Please ensure this website's domain is authorized in your Firebase project settings.`,
-        };
-      }
-      // Reset verifier on other errors to allow retry
-      if (pathname === "/login") {
-        setupRecaptcha();
-      }
-      return {
-        success: false,
-        message: `OTP could not be sent. ${errCode ?? "unknown_error"}`,
-      };
-    }
-  };
 
   const refreshGroupDirectory = useCallback(async () => {
     try {
@@ -317,32 +210,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsDataLoading(false);
       }
 
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const unsubscribe = onAuthStateChanged(auth, async () => {
         try {
-          // Admin user is handled separately as it doesn't use Firebase Auth.
-          const storedAdminId = localStorage.getItem(LOCAL_USER_ID_KEY);
-          if (storedAdminId === "admin") {
-            const adminUser = await getUser("admin");
-            if (adminUser) {
-              setCurrentUser(adminUser);
-              setIsAdmin(true);
+          const storedUserId = localStorage.getItem(LOCAL_USER_ID_KEY);
+          if (storedUserId) {
+            const appUser = await getUser(storedUserId);
+            if (appUser) {
+              setCurrentUser(appUser);
+              setIsAdmin(storedUserId === "admin");
             } else {
               setCurrentUser(null);
               setIsAdmin(false);
               localStorage.removeItem(LOCAL_USER_ID_KEY);
-            }
-          } else if (firebaseUser) {
-            const storedId = localStorage.getItem(LOCAL_USER_ID_KEY);
-            if (storedId) {
-              const appUser = await getUser(storedId);
-              if (appUser) {
-                setCurrentUser(appUser);
-                setIsAdmin(false);
-              } else {
-                await signOut(auth); // Mismatch, sign out
-              }
-            } else {
-              await signOut(auth); // No stored ID, sign out
             }
           } else {
             setCurrentUser(null);
@@ -418,20 +297,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // --- Setup recaptcha only on login page ---
-  useEffect(() => {
-    if (
-      isAppConfigured &&
-      pathname === "/login" &&
-      !isAuthLoading &&
-      !currentUser
-    ) {
-      if (!window.recaptchaVerifier) {
-        setupRecaptcha();
-      }
-    }
-  }, [pathname, isAppConfigured, isAuthLoading, currentUser, setupRecaptcha]);
-
   // --- Lockout ---
   const getLockoutTime = (
     role: "admin" | "member",
@@ -474,7 +339,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string;
   }): Promise<{
     success: boolean;
-    requiresOtp?: boolean;
     lockedUntil?: number;
     message?: string;
   }> => {
@@ -524,25 +388,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      if (!matchedUser.phoneNumber) {
-        return {
-          success: false,
-          message:
-            "Admin phone number is not set. Update it from setup/settings first.",
-        };
-      }
-
-      const otpResult = await sendOtp(matchedUser.phoneNumber);
-      if (!otpResult.success) {
-        return {
-          success: false,
-          message: otpResult.message || "Could not send OTP.",
-        };
-      }
-
       clearLoginAttempts(getAttemptsKey("admin"));
-      setPendingUserId("admin");
-      return { success: true, requiresOtp: true };
+      localStorage.setItem(LOCAL_USER_ID_KEY, "admin");
+      setCurrentUser(matchedUser);
+      setIsAdmin(true);
+      router.push("/");
+      return { success: true };
     }
 
     const memberLockoutEnd = getLockoutTime("member", matchedUser.id);
@@ -602,109 +453,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: false, message: "Invalid admin password.", ...failure };
   };
 
-  // --- Member login step 1: Verify PIN ---
-  const verifyPin = async (userId: string, pin: string) => {
-    if (!isAppConfigured) {
-      return {
-        success: false,
-        message:
-          "Setup is not complete yet. Please finish configuration first.",
-      };
-    }
-
-    const key = getAttemptsKey("member", userId);
-    const lockoutEnd = getLockoutTime("member", userId);
-    if (Date.now() < lockoutEnd)
-      return { success: false, lockedUntil: lockoutEnd };
-
-    const user = await getUser(userId);
-    if (user && user.pin === pin) {
-      clearLoginAttempts(key);
-      setPendingUserId(userId); // Set pending user for next steps
-      if (user.phoneNumber) {
-        // Phone number exists, proceed to send OTP
-        const otpResult = await sendOtp(user.phoneNumber);
-        if (otpResult.success) {
-          return { success: true, needsPhoneNumber: false };
-        } else {
-          return { success: false, message: otpResult.message };
-        }
-      } else {
-        // Phone number does not exist, need to ask user for it
-        return { success: true, needsPhoneNumber: true };
-      }
-    } else {
-      const failure = recordFailedAttempt("member", userId);
-      return { success: false, message: "Invalid PIN.", ...failure };
-    }
-  };
-
-  // --- Member login step 2: Save Phone Number & Send OTP ---
-  const savePhoneNumberAndSendOtp = async (
-    userId: string,
-    phoneNumber: string,
-  ) => {
-    if (userId !== pendingUserId) {
-      return {
-        success: false,
-        message: "User session mismatch. Please start over.",
-      };
-    }
-    try {
-      await updateUserPhoneNumber(userId, phoneNumber);
-      // Refresh local users array
-      setUsers(users.map((u) => (u.id === userId ? { ...u, phoneNumber } : u)));
-      return await sendOtp(phoneNumber);
-    } catch (error: unknown) {
-      return {
-        success: false,
-        message: getErrorMessage(error) || "Could not save phone number.",
-      };
-    }
-  };
-
-  // --- Member login step 3: Verify OTP ---
-  const verifyOtp = async (otp: string) => {
-    if (!confirmationResult || !pendingUserId) {
-      return { success: false, message: "No OTP request pending." };
-    }
-    try {
-      // confirm the otp
-      await confirmationResult.confirm(otp);
-
-      const appUser = await getUser(pendingUserId);
-      if (appUser) {
-        // Store user ID, set current user state immediately
-        localStorage.setItem(LOCAL_USER_ID_KEY, pendingUserId);
-        setCurrentUser(appUser);
-        setIsAdmin(pendingUserId === "admin");
-        router.push("/");
-      } else {
-        throw new Error("Could not find user data after authentication.");
-      }
-
-      // Clean up state
-      setConfirmationResult(null);
-      setPendingUserId(null);
-
-      return { success: true };
-    } catch (err: unknown) {
-      console.error("OTP verification error:", err);
-      // Don't record this as a lockout failure, just an invalid OTP
-      return { success: false, message: `Invalid OTP. Please try again.` };
-    }
-  };
-
   // --- Logout ---
   const logout = async () => {
-    if (isAdmin) {
-      localStorage.removeItem(LOCAL_USER_ID_KEY);
-      setCurrentUser(null);
-      setIsAdmin(false);
-      router.push("/login");
-    } else {
-      await signOut(auth);
-    }
+    localStorage.removeItem(LOCAL_USER_ID_KEY);
+    setCurrentUser(null);
+    setIsAdmin(false);
+    await signOut(auth).catch(() => {
+      // noop
+    });
+    router.push("/login");
   };
 
   // --- Get Token ---
@@ -768,9 +525,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     users,
     loginWithCredentials,
     login,
-    verifyPin,
-    savePhoneNumberAndSendOtp,
-    verifyOtp,
     logout,
     updateUserCredential,
     registerMember,
@@ -782,18 +536,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getToken,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-      {/* must exist in DOM for reCAPTCHA */}
-      <div id="recaptcha-container" />
-    </AuthContext.Provider>
-  );
-}
-
-// Extend the window interface for the recaptcha verifier
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-  }
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

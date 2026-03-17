@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -27,13 +27,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { initializeTrackerInstance } from "@/lib/firestore";
 import { CheckCircle2 } from "lucide-react";
-import {
-  ConfirmationResult,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  signOut,
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import type {
   SetupMemberInput,
   TrackerSetupPayload,
@@ -107,14 +100,6 @@ export default function SetupPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [themePreference] = useState<TrackerTheme>("system");
   const [adminPhoneNumber, setAdminPhoneNumber] = useState("");
-  const [adminOtp, setAdminOtp] = useState("");
-  const [adminOtpSent, setAdminOtpSent] = useState(false);
-  const [adminOtpVerified, setAdminOtpVerified] = useState(false);
-  const [isSendingAdminOtp, setIsSendingAdminOtp] = useState(false);
-  const [isVerifyingAdminOtp, setIsVerifyingAdminOtp] = useState(false);
-  const [adminOtpConfirmation, setAdminOtpConfirmation] =
-    useState<ConfirmationResult | null>(null);
-  const setupRecaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
   const stepIndex = setupSteps.indexOf(currentStep);
 
@@ -130,8 +115,7 @@ export default function SetupPage() {
         adminIndex >= 0 &&
         adminIndex < members.length &&
         adminPassword.trim().length >= 8 &&
-        /^[6-9]\d{9}$/.test(adminPhoneNumber) &&
-        adminOtpVerified
+        /^[6-9]\d{9}$/.test(adminPhoneNumber)
       );
     return true;
   }, [
@@ -142,7 +126,6 @@ export default function SetupPage() {
     adminIndex,
     adminPassword,
     adminPhoneNumber,
-    adminOtpVerified,
   ]);
 
   const getStepCompletion = (step: SetupStep): number => {
@@ -161,16 +144,22 @@ export default function SetupPage() {
         adminIndex >= 0 && adminIndex < members.length ? 1 : 0;
       const passwordProgress = Math.min(adminPassword.trim().length / 8, 1);
       const phoneProgress = /^[6-9]\d{9}$/.test(adminPhoneNumber) ? 1 : 0;
-      const otpProgress = adminOtpVerified ? 1 : 0;
-      return (
-        (selectedAdmin + passwordProgress + phoneProgress + otpProgress) / 4
-      );
+      return (selectedAdmin + passwordProgress + phoneProgress) / 3;
     }
     return 1;
   };
 
   const progressValue =
     ((stepIndex + getStepCompletion(currentStep)) / setupSteps.length) * 100;
+
+  const dotPatternLight = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E\")",
+  };
+  const dotPatternDark = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23475569'/%3E%3C/svg%3E\")",
+  };
 
   const stepTitle = useMemo(() => {
     switch (currentStep) {
@@ -234,116 +223,7 @@ export default function SetupPage() {
       .replace(/\D/g, "")
       .slice(-10);
     setAdminPhoneNumber(phone);
-    setAdminOtp("");
-    setAdminOtpSent(false);
-    setAdminOtpVerified(false);
-    setAdminOtpConfirmation(null);
   }, [adminIndex, members]);
-
-  useEffect(() => {
-    if (setupRecaptchaRef.current) {
-      setupRecaptchaRef.current.clear();
-      setupRecaptchaRef.current = null;
-    }
-  }, [adminPhoneNumber]);
-
-  const setupRecaptcha = () => {
-    if (setupRecaptchaRef.current) {
-      setupRecaptchaRef.current.clear();
-      setupRecaptchaRef.current = null;
-    }
-
-    const container = document.getElementById("setup-recaptcha-container");
-    if (!container) {
-      return null;
-    }
-
-    setupRecaptchaRef.current = new RecaptchaVerifier(auth, container, {
-      size: "invisible",
-    });
-
-    return setupRecaptchaRef.current;
-  };
-
-  const handleSendAdminOtp = async () => {
-    if (!/^[6-9]\d{9}$/.test(adminPhoneNumber)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Phone Number",
-        description: "Please enter a valid 10-digit Indian mobile number.",
-      });
-      return;
-    }
-
-    setIsSendingAdminOtp(true);
-    const fullPhoneNumber = `+91${adminPhoneNumber}`;
-
-    try {
-      const verifier = setupRecaptchaRef.current || setupRecaptcha();
-      if (!verifier) {
-        throw new Error("reCAPTCHA is not ready. Please try again.");
-      }
-
-      const confirmation = await signInWithPhoneNumber(
-        auth,
-        fullPhoneNumber,
-        verifier,
-      );
-      setAdminOtpConfirmation(confirmation);
-      setAdminOtpSent(true);
-      setAdminOtpVerified(false);
-      setAdminOtp("");
-      updateMember(adminIndex, { phoneNumber: adminPhoneNumber });
-
-      toast({
-        title: "OTP sent",
-        description: `OTP sent to ${fullPhoneNumber}`,
-      });
-    } catch (error: unknown) {
-      toast({
-        variant: "destructive",
-        title: "Failed to send OTP",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Could not send OTP. Check Firebase Authentication setup.",
-      });
-    } finally {
-      setIsSendingAdminOtp(false);
-    }
-  };
-
-  const handleVerifyAdminOtp = async () => {
-    if (!adminOtpConfirmation || !adminOtp.trim()) {
-      toast({
-        variant: "destructive",
-        title: "OTP required",
-        description: "Enter the OTP you received.",
-      });
-      return;
-    }
-
-    setIsVerifyingAdminOtp(true);
-    try {
-      await adminOtpConfirmation.confirm(adminOtp.trim());
-      await signOut(auth);
-      setAdminOtpVerified(true);
-      updateMember(adminIndex, { phoneNumber: adminPhoneNumber });
-      toast({
-        title: "Phone verified",
-        description: "Admin phone verification completed.",
-      });
-    } catch {
-      setAdminOtpVerified(false);
-      toast({
-        variant: "destructive",
-        title: "Invalid OTP",
-        description: "Please check OTP and try again.",
-      });
-    } finally {
-      setIsVerifyingAdminOtp(false);
-    }
-  };
 
   const handleGroupImageUpload = async (file: File | undefined) => {
     if (!file) return;
@@ -432,10 +312,18 @@ export default function SetupPage() {
   if (isAuthLoading) return null;
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden p-4 md:p-8">
-      <div className="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl dark:bg-cyan-500/15" />
-      <div className="pointer-events-none absolute right-0 top-20 h-72 w-72 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-500/15" />
-      <div className="pointer-events-none absolute -right-12 bottom-0 h-72 w-72 rounded-full bg-amber-300/25 blur-3xl dark:bg-amber-500/15" />
+    <div className="relative min-h-screen w-full overflow-hidden bg-slate-50 p-4 dark:bg-slate-950 md:p-8">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+        style={dotPatternLight}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+        style={dotPatternDark}
+      />
+      <div className="pointer-events-none absolute left-10 top-10 h-20 w-20 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+      <div className="pointer-events-none absolute right-12 top-24 h-16 w-16 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
+      <div className="pointer-events-none absolute bottom-12 right-16 h-24 w-24 rounded-xl border border-amber-200 bg-amber-100/70 dark:border-amber-900 dark:bg-amber-950/40" />
       <div className="relative mx-auto max-w-7xl space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -452,7 +340,7 @@ export default function SetupPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <Card className="modern-surface border-0 shadow-xl h-fit">
+          <Card className="modern-surface border-0 h-fit">
             <CardHeader className="space-y-3">
               <CardTitle className="text-base">Setup Progress</CardTitle>
               <CardDescription>
@@ -487,7 +375,7 @@ export default function SetupPage() {
             </CardContent>
           </Card>
 
-          <Card className="modern-surface border-0 shadow-xl">
+          <Card className="modern-surface border-0">
             <CardHeader className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -581,7 +469,7 @@ export default function SetupPage() {
                   {members.map((member, index) => (
                     <Card
                       key={`member-${index}`}
-                      className="modern-surface border-0 shadow-sm"
+                      className="modern-surface border-0"
                     >
                       <CardHeader>
                         <CardTitle className="text-base">
@@ -689,13 +577,12 @@ export default function SetupPage() {
                     </div>
                   </div>
 
-                  <Card className="modern-surface border-0 shadow-sm">
+                  <Card className="modern-surface border-0">
                     <CardHeader>
-                      <CardTitle className="text-base">
-                        Admin OTP verification
-                      </CardTitle>
+                      <CardTitle className="text-base">Admin contact</CardTitle>
                       <CardDescription>
-                        Verify admin mobile number before moving to review.
+                        Add admin mobile number for records and account
+                        recovery.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -714,55 +601,17 @@ export default function SetupPage() {
                                 e.target.value.replace(/\D/g, ""),
                               )
                             }
+                            onBlur={() =>
+                              updateMember(adminIndex, {
+                                phoneNumber: adminPhoneNumber,
+                              })
+                            }
                             placeholder="9876543210"
                             maxLength={10}
                             className="pl-10"
                           />
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleSendAdminOtp}
-                          disabled={
-                            isSendingAdminOtp ||
-                            !/^[6-9]\d{9}$/.test(adminPhoneNumber)
-                          }
-                        >
-                          {isSendingAdminOtp ? "Sending OTP..." : "Send OTP"}
-                        </Button>
-                        {adminOtpVerified && (
-                          <Badge className="bg-emerald-600 hover:bg-emerald-600">
-                            Verified
-                          </Badge>
-                        )}
-                      </div>
-
-                      {adminOtpSent && (
-                        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                          <Input
-                            value={adminOtp}
-                            onChange={(e) =>
-                              setAdminOtp(e.target.value.replace(/\D/g, ""))
-                            }
-                            placeholder="Enter 6-digit OTP"
-                            maxLength={6}
-                          />
-                          <Button
-                            type="button"
-                            onClick={handleVerifyAdminOtp}
-                            disabled={isVerifyingAdminOtp || !adminOtp.trim()}
-                          >
-                            {isVerifyingAdminOtp
-                              ? "Verifying..."
-                              : "Verify OTP"}
-                          </Button>
-                        </div>
-                      )}
-
-                      <div id="setup-recaptcha-container" />
                     </CardContent>
                   </Card>
                 </div>

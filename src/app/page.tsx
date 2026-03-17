@@ -191,6 +191,15 @@ export default function DashboardPage() {
     year: "numeric",
   });
 
+  const dotPatternLight = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%2394a3b8'/%3E%3C/svg%3E\")",
+  };
+  const dotPatternDark = {
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23475569'/%3E%3C/svg%3E\")",
+  };
+
   return (
     <div className="flex h-screen flex-col">
       <PageHeader
@@ -198,12 +207,20 @@ export default function DashboardPage() {
         onAddContribution={handleAddContribution}
         users={users}
       />
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+      <div className="relative flex-1 overflow-y-auto bg-slate-50 p-4 dark:bg-slate-950 md:p-6 lg:p-8">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-35 dark:hidden"
+          style={dotPatternLight}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 hidden opacity-30 dark:block"
+          style={dotPatternDark}
+        />
         <div className="mx-auto w-full max-w-7xl space-y-6 animate-fade-up">
           <Card className="modern-surface border-0 overflow-hidden">
             <CardContent className="relative p-5 md:p-6">
-              <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-cyan-400/15 blur-3xl" />
-              <div className="pointer-events-none absolute -left-16 -bottom-16 h-44 w-44 rounded-full bg-emerald-400/10 blur-3xl" />
+              <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-2xl border border-cyan-200 bg-cyan-100/70 dark:border-cyan-900 dark:bg-cyan-950/40" />
+              <div className="pointer-events-none absolute -left-6 -bottom-6 h-14 w-14 rounded-full border border-emerald-200 bg-emerald-100/70 dark:border-emerald-900 dark:bg-emerald-950/40" />
               <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
