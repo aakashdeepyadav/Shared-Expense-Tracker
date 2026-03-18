@@ -70,29 +70,29 @@ export function ContributionChart({
   return (
     <ChartContainer
       config={chartConfig}
-      className="mx-auto min-h-[210px] w-full min-w-0 max-w-[25rem] overflow-hidden sm:min-h-[220px] md:max-w-none"
+      className="mx-auto min-h-[190px] w-full min-w-0 max-w-[22rem] overflow-hidden sm:min-h-[220px] sm:max-w-[25rem] md:max-w-none"
     >
       <BarChart
         accessibilityLayer
         data={contributionData}
-        margin={{ top: 12, right: 4, bottom: 8, left: 0 }}
+        margin={{ top: 10, right: 2, bottom: 6, left: 0 }}
       >
         <CartesianGrid vertical={false} strokeDasharray="3 4" opacity={0.35} />
         <XAxis
           dataKey="name"
           tickLine={false}
-          tickMargin={10}
+          tickMargin={8}
           axisLine={false}
           interval={0}
           tickFormatter={(value) => String(value).slice(0, 8)}
-          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
         />
         <YAxis
           tickFormatter={(value) => `₹${compactCurrency.format(Number(value))}`}
           tickLine={false}
           axisLine={false}
-          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-          width={52}
+          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+          width={48}
         />
         <ChartTooltip
           cursor={false}
@@ -103,7 +103,7 @@ export function ContributionChart({
             />
           }
         />
-        <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={42}>
+        <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={36}>
           {contributionData.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.fill} />
           ))}

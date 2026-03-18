@@ -23,19 +23,19 @@ export function RecentContributions({
   const userMap = new Map(users.map((user) => [user.id, user]));
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[25rem] md:max-w-none">
-      <div className="space-y-3 md:hidden">
+    <div className="mx-auto w-full min-w-0 max-w-[22rem] md:max-w-none">
+      <div className="space-y-2.5 md:hidden">
         {contributions.length > 0 ? (
           contributions.slice(0, 5).map((contribution) => {
             const contributor = userMap.get(contribution.contributorId);
             return (
               <div
                 key={contribution.id}
-                className="rounded-xl border border-border/70 bg-background/70 p-3"
+                className="rounded-lg border border-border/70 bg-background/70 p-2.5"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    <Avatar className="h-8 w-8 ring-1 ring-border/60">
+                    <Avatar className="h-7 w-7 ring-1 ring-border/60">
                       <AvatarImage
                         src={contributor?.avatarUrl}
                         alt={contributor?.name}
@@ -46,7 +46,7 @@ export function RecentContributions({
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="truncate font-medium">
+                      <p className="truncate text-sm font-medium">
                         {contributor?.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -54,7 +54,7 @@ export function RecentContributions({
                       </p>
                     </div>
                   </div>
-                  <p className="shrink-0 text-sm font-semibold">
+                  <p className="shrink-0 text-xs font-semibold">
                     {formatCurrency(contribution.amount)}
                   </p>
                 </div>

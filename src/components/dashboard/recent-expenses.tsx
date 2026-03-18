@@ -29,31 +29,31 @@ export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
   });
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[25rem] md:max-w-none">
-      <div className="space-y-3 md:hidden">
+    <div className="mx-auto w-full min-w-0 max-w-[22rem] md:max-w-none">
+      <div className="space-y-2.5 md:hidden">
         {expenses.length > 0 ? (
           expenses.slice(0, 5).map((expense) => {
             const payer = userMap.get(expense.payerId);
             return (
               <div
                 key={expense.id}
-                className="rounded-xl border border-border/70 bg-background/70 p-3"
+                className="rounded-lg border border-border/70 bg-background/70 p-2.5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">
+                    <p className="truncate text-sm font-medium">
                       {expense.description}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {format(new Date(expense.date), "dd/MM/yyyy")}
                     </p>
                   </div>
-                  <p className="shrink-0 text-sm font-semibold">
+                  <p className="shrink-0 text-xs font-semibold">
                     {formatCurrency(expense.amount)}
                   </p>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <Avatar className="h-7 w-7 ring-1 ring-border/60">
+                <div className="mt-2.5 flex items-center gap-2">
+                  <Avatar className="h-6 w-6 ring-1 ring-border/60">
                     <AvatarImage
                       src={payer?.avatarUrl}
                       alt={payer?.name}
@@ -61,14 +61,18 @@ export function RecentExpenses({ expenses, users }: RecentExpensesProps) {
                     />
                     <AvatarFallback>{payer?.name.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  <span className="min-w-0 truncate text-sm text-muted-foreground">
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
                     {payer?.name}
                   </span>
                 </div>
                 {expense.tags && expense.tags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {expense.tags.map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs">
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className="px-1.5 py-0.5 text-[10px]"
+                      >
                         {tag}
                       </Badge>
                     ))}

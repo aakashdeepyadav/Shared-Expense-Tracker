@@ -33,15 +33,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Calendar } from "./ui/calendar";
-import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { predefinedTags } from "@/lib/data";
 import type { Expense, User } from "@/lib/types";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const expenseFormSchema = z.object({
   amount: z.coerce.number().min(0.01, "Amount must be greater than 0."),
@@ -79,8 +75,6 @@ export function ExpenseDialog({
 }: ExpenseDialogProps) {
   const { toast } = useToast();
   const [customTag, setCustomTag] = useState("");
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const isMobile = useIsMobile();
 
   const defaultValues = React.useMemo(
     () => ({
@@ -103,7 +97,6 @@ export function ExpenseDialog({
   React.useEffect(() => {
     if (open) {
       form.reset(defaultValues);
-      setIsDatePickerOpen(false);
     }
   }, [open, defaultValues, form]);
 
@@ -292,58 +285,19 @@ export function ExpenseDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Date of Expense</FormLabel>
-                  {isMobile ? (
-                    <FormControl>
-                      <Input
-                        type="date"
-                        value={
-                          field.value ? format(field.value, "yyyy-MM-dd") : ""
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (!value) return;
-                          field.onChange(new Date(`${value}T12:00:00`));
-                        }}
-                      />
-                    </FormControl>
-                  ) : (
-                    <Popover
-                      open={isDatePickerOpen}
-                      onOpenChange={setIsDatePickerOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground",
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            if (!date) return;
-                            field.onChange(date);
-                            setIsDatePickerOpen(false);
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                  <FormControl>
+                    <Input
+                      type="date"
+                      value={
+                        field.value ? format(field.value, "yyyy-MM-dd") : ""
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (!value) return;
+                        field.onChange(new Date(`${value}T12:00:00`));
+                      }}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

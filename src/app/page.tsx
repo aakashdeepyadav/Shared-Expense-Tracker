@@ -273,8 +273,8 @@ export default function DashboardPage() {
             users={users}
           />
           <div className="grid gap-6">
-            <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
-              <CardHeader className="pb-3">
+            <Card className="modern-surface mx-auto w-full max-w-[30rem] border-0 md:max-w-none">
+              <CardHeader className="px-4 pb-2 pt-4 sm:px-6 sm:pb-3 sm:pt-6">
                 <CardTitle className="text-xl tracking-tight">
                   Member Contributions
                 </CardTitle>
@@ -283,7 +283,7 @@ export default function DashboardPage() {
                   (wallet contributions + expenses paid).
                 </CardDescription>
               </CardHeader>
-              <CardContent className="min-w-0 overflow-hidden">
+              <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6 min-w-0 overflow-hidden">
                 <ContributionChart
                   contributions={contributions}
                   users={users}
@@ -292,8 +292,8 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
             <div className="grid gap-6 md:grid-cols-2">
-              <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
-                <CardHeader className="pb-3">
+              <Card className="modern-surface mx-auto w-full max-w-[30rem] border-0 md:max-w-none">
+                <CardHeader className="px-4 pb-2 pt-4 sm:px-6 sm:pb-3 sm:pt-6">
                   <CardTitle className="tracking-tight">
                     Recent Expenses
                   </CardTitle>
@@ -301,12 +301,12 @@ export default function DashboardPage() {
                     A list of the most recent expenses.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="min-w-0 overflow-hidden">
+                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6 min-w-0 overflow-hidden">
                   <RecentExpenses expenses={visibleExpenses} users={users} />
                 </CardContent>
               </Card>
-              <Card className="modern-surface mx-auto w-full max-w-[32rem] border-0 md:max-w-none">
-                <CardHeader className="pb-3">
+              <Card className="modern-surface mx-auto w-full max-w-[30rem] border-0 md:max-w-none">
+                <CardHeader className="px-4 pb-2 pt-4 sm:px-6 sm:pb-3 sm:pt-6">
                   <CardTitle className="tracking-tight">
                     Recent Contributions
                   </CardTitle>
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                     Recent additions to the group wallet.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="min-w-0 overflow-hidden">
+                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6 min-w-0 overflow-hidden">
                   <RecentContributions
                     contributions={visibleContributions}
                     users={users}
