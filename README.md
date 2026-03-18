@@ -30,6 +30,17 @@ It helps a household, team, or travel group track contributions, expenses, chat,
   - fruits, milk, eggs, store
 - Added Settings flow to update/clear group picture URL.
 - Improved mobile dashboard/header responsiveness to prevent horizontal overflow.
+- Enforced latest-first ordering in history pages by date and time:
+  - Expense History (latest on top)
+  - Contribution History (latest on top)
+- Fixed theme switcher icon behavior:
+  - Light mode shows moon (switch to dark)
+  - Dark mode shows sun (switch to light)
+- Refined dashboard cards on phone for better alignment:
+  - Member Contributions graph centered and resized
+  - Recent Expenses centered with compact mobile card sizing
+  - Recent Contributions centered with compact mobile card sizing
+- Standardized Add Expense date input to native picker on all devices for reliable laptop and mobile selection.
 
 ## Financial Logic Rules
 
